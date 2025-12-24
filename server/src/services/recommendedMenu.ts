@@ -1017,7 +1017,6 @@ Generate a COMPLETE new menu in JSON format with the same structure as before, b
           meals: {
             include: {
               ingredients: true,
-              completions: true,
             },
             orderBy: [{ day_number: "asc" }, { meal_type: "asc" }],
           },
@@ -1028,9 +1027,20 @@ Generate a COMPLETE new menu in JSON format with the same structure as before, b
         throw new Error("Menu not found");
       }
 
+      const mealCompletions = await prisma.mealCompletion.findMany({
+        where: {
+          user_id: userId,
+          menu_id: menuId,
+        },
+      });
+
       const totalMeals = menu.meals.length;
-      const completedMeals = menu.meals.filter(
-        (meal) => meal.completions && meal.completions.length > 0
+      const completedMeals = menu.meals.filter((meal) =>
+        mealCompletions.some(
+          (completion) =>
+            completion.day_number === meal.day_number &&
+            completion.meal_type === meal.meal_type
+        )
       ).length;
 
       const completionRate =
@@ -1057,8 +1067,12 @@ Generate a COMPLETE new menu in JSON format with the same structure as before, b
             (meal) => meal.day_number === dayNumber
           );
 
-          const dayCompletedMeals = dayMeals.filter(
-            (meal) => meal.completions && meal.completions.length > 0
+          const dayCompletedMeals = dayMeals.filter((meal) =>
+            mealCompletions.some(
+              (completion) =>
+                completion.day_number === meal.day_number &&
+                completion.meal_type === meal.meal_type
+            )
           ).length;
 
           const dayCalories = dayMeals.reduce(
@@ -1072,7 +1086,7 @@ Generate a COMPLETE new menu in JSON format with the same structure as before, b
           const dayCarbs = dayMeals.reduce((sum, meal) => sum + meal.carbs, 0);
           const dayFat = dayMeals.reduce((sum, meal) => sum + meal.fat, 0);
 
-          const dayDate = new Date(menu.start_date);
+          const dayDate = new Date(menu.start_date || new Date());
           dayDate.setDate(dayDate.getDate() + dayIndex);
 
           return {
@@ -1091,8 +1105,8 @@ Generate a COMPLETE new menu in JSON format with the same structure as before, b
         menu_id: menu.menu_id,
         title: menu.title,
         total_days: menu.days_count,
-        start_date: menu.start_date,
-        end_date: menu.end_date,
+        start_date: menu.start_date ? new Date(menu.start_date) : new Date(),
+        end_date: menu.end_date ? new Date(menu.end_date) : new Date(),
         total_meals: totalMeals,
         completed_meals: completedMeals,
         completion_rate: Math.round(completionRate * 100) / 100,

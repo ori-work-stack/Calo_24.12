@@ -7,7 +7,7 @@ import {
 } from "../types/openai";
 import { extractCleanJSON } from "../utils/openai";
 
-const openai = process.env.OPENAI_API_KEY
+export const openai = process.env.OPENAI_API_KEY
   ? new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
     })
@@ -327,6 +327,9 @@ export class OpenAIService {
           {
             name: "pie crust",
             calories: 150,
+            protein: 2,
+            carbs: 20,
+            fat: 8,
             protein_g: 2,
             carbs_g: 20,
             fats_g: 8,
@@ -334,17 +337,23 @@ export class OpenAIService {
           {
             name: "fruit filling",
             calories: 120,
+            protein: 1,
+            carbs: 30,
+            fat: 1,
             protein_g: 1,
             carbs_g: 30,
             fats_g: 1,
           },
-          { name: "sugar", calories: 50, protein_g: 0, carbs_g: 13, fats_g: 0 },
+          { name: "sugar", calories: 50, protein: 0, carbs: 13, fat: 0, protein_g: 0, carbs_g: 13, fats_g: 0 },
         ];
       } else if (mealName.toLowerCase().includes("salad")) {
         return [
           {
             name: "mixed greens",
             calories: 20,
+            protein: 2,
+            carbs: 4,
+            fat: 0,
             protein_g: 2,
             carbs_g: 4,
             fats_g: 0,
@@ -352,6 +361,9 @@ export class OpenAIService {
           {
             name: "vegetables",
             calories: 30,
+            protein: 2,
+            carbs: 7,
+            fat: 0,
             protein_g: 2,
             carbs_g: 7,
             fats_g: 0,
@@ -359,6 +371,9 @@ export class OpenAIService {
           {
             name: "dressing",
             calories: 80,
+            protein: 0,
+            carbs: 2,
+            fat: 9,
             protein_g: 0,
             carbs_g: 2,
             fats_g: 9,
@@ -372,6 +387,9 @@ export class OpenAIService {
       {
         name: "Main ingredients",
         calories: 200,
+        protein: 10,
+        carbs: 25,
+        fat: 8,
         protein_g: 10,
         carbs_g: 25,
         fats_g: 8,
@@ -901,6 +919,9 @@ Language: ${language}`;
         ingredients: editedIngredients.map((ing: any) => ({
           name: ing.name || "Unknown ingredient",
           calories: Number(ing.calories) || 0,
+          protein: Number(ing.protein) || 0,
+          carbs: Number(ing.carbs) || 0,
+          fat: Number(ing.fat) || 0,
           protein_g: Number(ing.protein) || 0,
           carbs_g: Number(ing.carbs) || 0,
           fats_g: Number(ing.fat) || 0,
@@ -918,8 +939,8 @@ Language: ${language}`;
           alcohol_g: Number(ing.alcohol_g) || 0,
           caffeine_mg: Number(ing.caffeine_mg) || 0,
           serving_size_g: Number(ing.serving_size_g) || 0,
-          glycemic_index: ing.glycemic_index || null,
-          insulin_index: ing.insulin_index || null,
+          glycemic_index: ing.glycemic_index || undefined,
+          insulin_index: ing.insulin_index || undefined,
           vitamins_json: ing.vitamins_json || {},
           micronutrients_json: ing.micronutrients_json || {},
           allergens_json: ing.allergens_json || {},
@@ -931,8 +952,8 @@ Language: ${language}`;
         vitamins_json: this.aggregateVitamins(editedIngredients),
         micronutrients_json: this.aggregateMicronutrients(editedIngredients),
         allergens_json: this.aggregateAllergens(editedIngredients),
-        glycemic_index: this.calculateAverageGI(editedIngredients),
-        insulin_index: this.calculateAverageII(editedIngredients),
+        glycemic_index: this.calculateAverageGI(editedIngredients) ?? undefined,
+        insulin_index: this.calculateAverageII(editedIngredients) ?? undefined,
         food_category: "Mixed ingredients",
         processing_level: "Varies by ingredient",
       };
@@ -1030,26 +1051,35 @@ Language: ${language}`;
               return {
                 name: ing,
                 calories: 0,
+                protein: 0,
+                carbs: 0,
+                fat: 0,
                 protein_g: 0,
                 carbs_g: 0,
                 fats_g: 0,
               };
             }
+            const proteinVal = Math.max(
+              0,
+              Number(ing.protein_g) || Number(ing.protein) || 0
+            );
+            const carbsVal = Math.max(
+              0,
+              Number(ing.carbs_g) || Number(ing.carbs) || 0
+            );
+            const fatVal = Math.max(
+              0,
+              Number(ing.fats_g) || Number(ing.fat) || Number(ing.fats) || 0
+            );
             return {
               name: ing.name || `Unknown ingredient ${index + 1}`,
               calories: Math.max(0, Number(ing.calories) || 0),
-              protein_g: Math.max(
-                0,
-                Number(ing.protein_g) || Number(ing.protein) || 0
-              ),
-              carbs_g: Math.max(
-                0,
-                Number(ing.carbs_g) || Number(ing.carbs) || 0
-              ),
-              fats_g: Math.max(
-                0,
-                Number(ing.fats_g) || Number(ing.fat) || Number(ing.fats) || 0
-              ),
+              protein: proteinVal,
+              carbs: carbsVal,
+              fat: fatVal,
+              protein_g: proteinVal,
+              carbs_g: carbsVal,
+              fats_g: fatVal,
               fiber_g: ing.fiber_g
                 ? Math.max(0, Number(ing.fiber_g))
                 : undefined,
@@ -1085,6 +1115,9 @@ Language: ${language}`;
             {
               name: "pie crust",
               calories: 150,
+              protein: 2,
+              carbs: 20,
+              fat: 8,
               protein_g: 2,
               carbs_g: 20,
               fats_g: 8,
@@ -1092,6 +1125,9 @@ Language: ${language}`;
             {
               name: "fruit filling",
               calories: 120,
+              protein: 1,
+              carbs: 30,
+              fat: 1,
               protein_g: 1,
               carbs_g: 30,
               fats_g: 1,
@@ -1099,6 +1135,9 @@ Language: ${language}`;
             {
               name: "sugar",
               calories: 50,
+              protein: 0,
+              carbs: 13,
+              fat: 0,
               protein_g: 0,
               carbs_g: 13,
               fats_g: 0,
@@ -1106,20 +1145,32 @@ Language: ${language}`;
           ];
         }
 
+        const mainProtein = Math.floor((parsed.protein_g || 0) * 0.6);
+        const mainCarbs = Math.floor((parsed.carbs_g || 0) * 0.6);
+        const mainFat = Math.floor((parsed.fats_g || 0) * 0.6);
+        const addProtein = Math.floor((parsed.protein_g || 0) * 0.4);
+        const addCarbs = Math.floor((parsed.carbs_g || 0) * 0.4);
+        const addFat = Math.floor((parsed.fats_g || 0) * 0.4);
         return [
           {
             name: "Main components",
             calories: Math.floor((parsed.calories || 0) * 0.6),
-            protein_g: Math.floor((parsed.protein_g || 0) * 0.6),
-            carbs_g: Math.floor((parsed.carbs_g || 0) * 0.6),
-            fats_g: Math.floor((parsed.fats_g || 0) * 0.6),
+            protein: mainProtein,
+            carbs: mainCarbs,
+            fat: mainFat,
+            protein_g: mainProtein,
+            carbs_g: mainCarbs,
+            fats_g: mainFat,
           },
           {
             name: "Additional ingredients",
             calories: Math.floor((parsed.calories || 0) * 0.4),
-            protein_g: Math.floor((parsed.protein_g || 0) * 0.4),
-            carbs_g: Math.floor((parsed.carbs_g || 0) * 0.4),
-            fats_g: Math.floor((parsed.fats_g || 0) * 0.4),
+            protein: addProtein,
+            carbs: addCarbs,
+            fat: addFat,
+            protein_g: addProtein,
+            carbs_g: addCarbs,
+            fats_g: addFat,
           },
         ];
       })(),
@@ -1188,6 +1239,9 @@ Language: ${language}`;
         ingredients: editedIngredients.map((ing: any) => ({
           name: ing.name,
           calories: ing.calories || 0,
+          protein: ing.protein || 0,
+          carbs: ing.carbs || 0,
+          fat: ing.fat || 0,
           protein_g: ing.protein || 0,
           carbs_g: ing.carbs || 0,
           fats_g: ing.fat || 0,
@@ -1329,6 +1383,9 @@ Language: ${language}`;
         {
           name: language === "hebrew" ? "חסה" : "Lettuce",
           calories: 15,
+          protein: 1,
+          carbs: 3,
+          fat: 0,
           protein_g: 1,
           carbs_g: 3,
           fats_g: 0,
@@ -1336,6 +1393,9 @@ Language: ${language}`;
         {
           name: language === "hebrew" ? "עגבניות" : "Tomatoes",
           calories: 25,
+          protein: 1,
+          carbs: 5,
+          fat: 0,
           protein_g: 1,
           carbs_g: 5,
           fats_g: 0,
@@ -1343,6 +1403,9 @@ Language: ${language}`;
         {
           name: language === "hebrew" ? "מלפפון" : "Cucumber",
           calories: 12,
+          protein: 1,
+          carbs: 3,
+          fat: 0,
           protein_g: 1,
           carbs_g: 3,
           fats_g: 0,
@@ -1350,6 +1413,9 @@ Language: ${language}`;
         {
           name: language === "hebrew" ? "שמן זית" : "Olive oil",
           calories: 120,
+          protein: 0,
+          carbs: 0,
+          fat: 14,
           protein_g: 0,
           carbs_g: 0,
           fats_g: 14,
@@ -1360,6 +1426,9 @@ Language: ${language}`;
         {
           name: language === "hebrew" ? "פסטה" : "Pasta",
           calories: 220,
+          protein: 8,
+          carbs: 44,
+          fat: 1,
           protein_g: 8,
           carbs_g: 44,
           fats_g: 1,
@@ -1367,6 +1436,9 @@ Language: ${language}`;
         {
           name: language === "hebrew" ? "רוטב עגבניות" : "Tomato sauce",
           calories: 35,
+          protein: 2,
+          carbs: 8,
+          fat: 0,
           protein_g: 2,
           carbs_g: 8,
           fats_g: 0,
@@ -1374,6 +1446,9 @@ Language: ${language}`;
         {
           name: language === "hebrew" ? "פרמזן" : "Parmesan cheese",
           calories: 110,
+          protein: 10,
+          carbs: 1,
+          fat: 7,
           protein_g: 10,
           carbs_g: 1,
           fats_g: 7,
@@ -1384,6 +1459,9 @@ Language: ${language}`;
         {
           name: language === "hebrew" ? "אורז לבן" : "White rice",
           calories: 180,
+          protein: 4,
+          carbs: 37,
+          fat: 0,
           protein_g: 4,
           carbs_g: 37,
           fats_g: 0,
@@ -1391,6 +1469,9 @@ Language: ${language}`;
         {
           name: language === "hebrew" ? "ירקות מבושלים" : "Steamed vegetables",
           calories: 35,
+          protein: 2,
+          carbs: 7,
+          fat: 0,
           protein_g: 2,
           carbs_g: 7,
           fats_g: 0,
@@ -1398,40 +1479,65 @@ Language: ${language}`;
         {
           name: language === "hebrew" ? "חזה עוף" : "Chicken breast",
           calories: 165,
+          protein: 31,
+          carbs: 0,
+          fat: 4,
           protein_g: 31,
           carbs_g: 0,
           fats_g: 4,
         },
       ];
     } else {
+      const mainProtein = Math.floor(baseMeal.protein * 0.6);
+      const mainCarbs = Math.floor(baseMeal.carbs * 0.2);
+      const mainFat = Math.floor(baseMeal.fat * 0.3);
+      const carbProtein = Math.floor(baseMeal.protein * 0.2);
+      const carbCarbs = Math.floor(baseMeal.carbs * 0.6);
+      const carbFat = Math.floor(baseMeal.fat * 0.1);
+      const vegProtein = Math.floor(baseMeal.protein * 0.15);
+      const vegCarbs = Math.floor(baseMeal.carbs * 0.15);
+      const vegFat = Math.floor(baseMeal.fat * 0.1);
+      const fatsFat = Math.floor(baseMeal.fat * 0.5);
       ingredients = [
         {
           name: language === "hebrew" ? "חלבון עיקרי" : "Main protein",
           calories: Math.floor(baseMeal.calories * 0.4),
-          protein_g: Math.floor(baseMeal.protein * 0.6),
-          carbs_g: Math.floor(baseMeal.carbs * 0.2),
-          fats_g: Math.floor(baseMeal.fat * 0.3),
+          protein: mainProtein,
+          carbs: mainCarbs,
+          fat: mainFat,
+          protein_g: mainProtein,
+          carbs_g: mainCarbs,
+          fats_g: mainFat,
         },
         {
           name: language === "hebrew" ? "פחמימות" : "Carbohydrate source",
           calories: Math.floor(baseMeal.calories * 0.3),
-          protein_g: Math.floor(baseMeal.protein * 0.2),
-          carbs_g: Math.floor(baseMeal.carbs * 0.6),
-          fats_g: Math.floor(baseMeal.fat * 0.1),
+          protein: carbProtein,
+          carbs: carbCarbs,
+          fat: carbFat,
+          protein_g: carbProtein,
+          carbs_g: carbCarbs,
+          fats_g: carbFat,
         },
         {
           name: language === "hebrew" ? "ירקות" : "Vegetables",
           calories: Math.floor(baseMeal.calories * 0.2),
-          protein_g: Math.floor(baseMeal.protein * 0.15),
-          carbs_g: Math.floor(baseMeal.carbs * 0.15),
-          fats_g: Math.floor(baseMeal.fat * 0.1),
+          protein: vegProtein,
+          carbs: vegCarbs,
+          fat: vegFat,
+          protein_g: vegProtein,
+          carbs_g: vegCarbs,
+          fats_g: vegFat,
         },
         {
           name: language === "hebrew" ? "שמנים בריאים" : "Healthy fats",
           calories: Math.floor(baseMeal.calories * 0.1),
+          protein: 0,
+          carbs: 0,
+          fat: fatsFat,
           protein_g: 0,
           carbs_g: 0,
-          fats_g: Math.floor(baseMeal.fat * 0.5),
+          fats_g: fatsFat,
         },
       ];
     }
@@ -1588,29 +1694,38 @@ Language for response: ${language}`;
                   return {
                     name: ing,
                     calories: 0,
+                    protein: 0,
+                    carbs: 0,
+                    fat: 0,
                     protein_g: 0,
                     carbs_g: 0,
                     fats_g: 0,
                   };
                 }
+                const proteinVal = Math.max(
+                  0,
+                  Number(ing.protein_g) || Number(ing.protein) || 0
+                );
+                const carbsVal = Math.max(
+                  0,
+                  Number(ing.carbs_g) || Number(ing.carbs) || 0
+                );
+                const fatVal = Math.max(
+                  0,
+                  Number(ing.fats_g) ||
+                    Number(ing.fat) ||
+                    Number(ing.fats) ||
+                    0
+                );
                 return {
                   name: ing.name || "Unknown",
                   calories: Math.max(0, Number(ing.calories) || 0),
-                  protein_g: Math.max(
-                    0,
-                    Number(ing.protein_g) || Number(ing.protein) || 0
-                  ),
-                  carbs_g: Math.max(
-                    0,
-                    Number(ing.carbs_g) || Number(ing.carbs) || 0
-                  ),
-                  fats_g: Math.max(
-                    0,
-                    Number(ing.fats_g) ||
-                      Number(ing.fat) ||
-                      Number(ing.fats) ||
-                      0
-                  ),
+                  protein: proteinVal,
+                  carbs: carbsVal,
+                  fat: fatVal,
+                  protein_g: proteinVal,
+                  carbs_g: carbsVal,
+                  fats_g: fatVal,
                   fiber_g: ing.fiber_g
                     ? Math.max(0, Number(ing.fiber_g))
                     : undefined,
@@ -1627,6 +1742,9 @@ Language for response: ${language}`;
                 {
                   name: parsed.ingredients,
                   calories: 0,
+                  protein: 0,
+                  carbs: 0,
+                  fat: 0,
                   protein_g: 0,
                   carbs_g: 0,
                   fats_g: 0,
