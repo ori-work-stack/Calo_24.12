@@ -85,7 +85,7 @@ export class OpenAIService {
       console.log("📏 Prompt length:", prompt.length, "characters");
 
       const response = await this.openai?.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
@@ -98,7 +98,7 @@ export class OpenAIService {
               prompt.length > 6000 ? prompt.substring(0, 6000) + "..." : prompt,
           },
         ],
-        max_completion_tokens: Math.min(maxTokens, 4000),
+        max_completion_tokens: Math.min(maxTokens, 16000),
       });
 
       const content = response?.choices[0]?.message?.content || "";
@@ -674,7 +674,7 @@ Language: ${language}`;
     console.log("🚀 CALLING OPENAI API!");
 
     const response = await this.openai!.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
@@ -697,7 +697,7 @@ Language: ${language}`;
           ],
         },
       ],
-      max_completion_tokens: 4000,
+      max_completion_tokens: 16000,
     });
 
     const content = response?.choices[0]?.message?.content;
@@ -1529,7 +1529,7 @@ Respond with a JSON object in the same format as the original analysis.
 Language for response: ${language}`;
 
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
@@ -1540,7 +1540,7 @@ Language for response: ${language}`;
             content: `Please update the nutritional analysis based on this additional information: "${updateText}"`,
           },
         ],
-        max_completion_tokens: 800,
+        max_completion_tokens: 16000,
       });
 
       const content = response.choices[0]?.message?.content;
@@ -2170,9 +2170,10 @@ IMPORTANT VARIATION REQUIREMENTS:
 Please provide breakfast, lunch, and dinner with detailed ingredients and nutritional information.`;
 
     const response = await this.openai?.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: "gpt-4o-mini",
       messages: [{ role: "user", content: prompt }],
       temperature: 0.9,
+      max_completion_tokens: 16000,
     });
 
     if (!response) {

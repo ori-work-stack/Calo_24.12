@@ -144,7 +144,7 @@ Return JSON with this exact structure:
 Extract all visible nutritional information. If a value is not visible, use 0 or null. Calculate health score based on nutritional quality: high fiber/protein = good, high sugar/sodium = bad. Be precise with nutritional values.`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-5",
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
@@ -167,7 +167,7 @@ Extract all visible nutritional information. If a value is not visible, use 0 or
             ],
           },
         ],
-        max_tokens: 1000,
+        max_completion_tokens: 16000,
         temperature: 0.1,
       });
 
