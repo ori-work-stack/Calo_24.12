@@ -14,21 +14,14 @@ import { useTheme } from "@/src/context/ThemeContext";
 import { useSelector } from "react-redux";
 import { RootState } from "@/src/store";
 import { api } from "@/src/services/api";
-import { Activity, TrendingUp, Award, Flame, Dumbbell, Target } from "lucide-react-native";
+import { Activity, TrendingUp, Award, Flame, Dumbbell, Target, Zap } from "lucide-react-native";
 
 const { width } = Dimensions.get("window");
 
-interface WeeklyData {
-  day: string;
-  calories: number;
-  protein: number;
-  carbs: number;
-}
-
-const BarChart = ({ data, height = 180 }: { data: number[]; height?: number }) => {
+const BarChart = ({ data }: { data: number[] }) => {
   if (!data || data.length === 0) {
     return (
-      <View style={[styles.chartContainer, { height }]}>
+      <View style={styles.chartContainer}>
         <Text style={styles.noDataText}>No data available</Text>
       </View>
     );
@@ -36,24 +29,29 @@ const BarChart = ({ data, height = 180 }: { data: number[]; height?: number }) =
 
   const maxValue = Math.max(...data, 1);
   const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  const colors = ["#3B82F6", "#8B5CF6", "#EC4899", "#F59E0B", "#10B981", "#06B6D4", "#6366F1"];
+  const gradients = [
+    ["#3B82F6", "#2563EB"],
+    ["#8B5CF6", "#7C3AED"],
+    ["#EC4899", "#DB2777"],
+    ["#F59E0B", "#D97706"],
+    ["#10B981", "#059669"],
+    ["#06B6D4", "#0891B2"],
+    ["#6366F1", "#4F46E5"],
+  ];
 
   return (
-    <View style={[styles.chartContainer, { height }]}>
+    <View style={styles.chartContainer}>
       <View style={styles.barsContainer}>
         {data.map((value, index) => {
-          const barHeight = (value / maxValue) * (height - 60);
+          const barHeight = Math.max((value / maxValue) * 140, 8);
           return (
             <View key={index} style={styles.barWrapper}>
               <View style={styles.barBackground}>
-                <View
-                  style={[
-                    styles.bar,
-                    {
-                      height: barHeight || 4,
-                      backgroundColor: colors[index % colors.length],
-                    },
-                  ]}
+                <LinearGradient
+                  colors={gradients[index % gradients.length]}
+                  style={[styles.bar, { height: barHeight }]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 1 }}
                 />
               </View>
               <Text style={styles.barLabel}>{days[index]}</Text>
@@ -82,13 +80,15 @@ const LineChart = ({ data }: { data: number[] }) => {
     <View style={styles.lineChartContainer}>
       <View style={styles.lineChart}>
         {data.map((value, index) => {
-          const barHeight = (value / maxValue) * 100;
+          const percentage = Math.max((value / maxValue) * 100, 5);
           return (
             <View key={index} style={styles.lineBarWrapper}>
               <View style={styles.lineBarBg}>
                 <LinearGradient
                   colors={["#8B5CF6", "#EC4899"]}
-                  style={[styles.lineBar, { height: `${barHeight}%` }]}
+                  style={[styles.lineBar, { height: `${percentage}%` }]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 1 }}
                 />
               </View>
               <Text style={styles.lineBarLabel}>{days[index]}</Text>
@@ -100,18 +100,20 @@ const LineChart = ({ data }: { data: number[] }) => {
   );
 };
 
-const StatCard = ({ title, value, unit, icon: Icon, colors, percentage }: any) => (
+const StatCard = ({ title, value, unit, icon: Icon, gradientColors, percentage }: any) => (
   <View style={styles.statCardWrapper}>
-    <LinearGradient colors={colors} style={styles.statCard}>
+    <LinearGradient colors={gradientColors} style={styles.statCard}>
       <View style={styles.statCardHeader}>
-        <Icon size={24} color="#fff" />
+        <View style={styles.statCardIconBg}>
+          <Icon size={22} color="#fff" strokeWidth={2.5} />
+        </View>
         <Text style={styles.statCardTitle}>{title}</Text>
       </View>
       <Text style={styles.statCardValue}>
         {value}
         <Text style={styles.statCardUnit}> {unit}</Text>
       </Text>
-      {percentage && (
+      {percentage !== undefined && (
         <View style={styles.percentageBar}>
           <View style={[styles.percentageFill, { width: `${percentage}%` }]} />
         </View>
@@ -127,6 +129,7 @@ const DaySelector = ({ days, selected, onSelect }: any) => (
         key={day}
         style={[styles.dayButton, selected === day && styles.dayButtonActive]}
         onPress={() => onSelect(day)}
+        activeOpacity={0.8}
       >
         <Text style={[styles.dayButtonText, selected === day && styles.dayButtonTextActive]}>
           {day}
@@ -141,7 +144,6 @@ export default function StatisticsScreen() {
   const { meals } = useSelector((state: RootState) => state.meal);
   const [selectedDay, setSelectedDay] = useState(13);
   const [refreshing, setRefreshing] = useState(false);
-  const [weeklyData, setWeeklyData] = useState<WeeklyData[]>([]);
   const [stats, setStats] = useState({
     totalCalories: 0,
     avgCalories: 0,
@@ -157,13 +159,13 @@ export default function StatisticsScreen() {
 
   const loadStatistics = async () => {
     try {
-      const response = await api.get("/statistics/weekly");
-
       const totalCalories = meals.reduce((sum, meal) => sum + (meal.calories || 0), 0);
       const totalProtein = meals.reduce((sum, meal) => sum + (meal.protein || 0), 0);
       const totalCarbs = meals.reduce((sum, meal) => sum + (meal.carbohydrates || 0), 0);
 
-      const weeklyCalories = [1200, 1500, 1800, 1600, 1900, 1400, 1700];
+      const weeklyCalories = meals.length > 0
+        ? [1200, 1500, 1800, 1600, 1900, 1400, 1700]
+        : [1200, 1500, 1800, 1600, 1900, 1400, 1700];
 
       setStats({
         totalCalories: Math.round(totalCalories) || 8500,
@@ -173,18 +175,8 @@ export default function StatisticsScreen() {
         totalMeals: meals.length || 21,
         weeklyCalories,
       });
-
-      const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-      const weekData: WeeklyData[] = days.map((day, i) => ({
-        day,
-        calories: weeklyCalories[i] || 0,
-        protein: Math.floor(Math.random() * 100) + 50,
-        carbs: Math.floor(Math.random() * 200) + 100,
-      }));
-      setWeeklyData(weekData);
     } catch (error) {
       console.error("Error loading statistics:", error);
-
       const defaultCalories = [1200, 1500, 1800, 1600, 1900, 1400, 1700];
       setStats({
         totalCalories: 8500,
@@ -194,15 +186,6 @@ export default function StatisticsScreen() {
         totalMeals: 21,
         weeklyCalories: defaultCalories,
       });
-
-      const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-      const weekData: WeeklyData[] = days.map((day, i) => ({
-        day,
-        calories: defaultCalories[i],
-        protein: 75,
-        carbs: 150,
-      }));
-      setWeeklyData(weekData);
     }
   };
 
@@ -219,12 +202,24 @@ export default function StatisticsScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <LinearGradient colors={["#1E3A8A", "#1E40AF"]} style={styles.motivationalCard}>
-          <Award size={56} color="#fff" style={styles.motivationalIcon} />
+        <LinearGradient
+          colors={["#1E3A8A", "#1E40AF", "#3B82F6"]}
+          style={styles.motivationalCard}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <View style={styles.motivationalIconContainer}>
+            <Award size={64} color="#fff" strokeWidth={2} />
+          </View>
           <Text style={styles.motivationalTitle}>Make yourself stronger</Text>
           <Text style={styles.motivationalSubtitle}>than your excuses</Text>
-          <TouchableOpacity style={styles.getStartedButton}>
-            <LinearGradient colors={["#3B82F6", "#2563EB"]} style={styles.getStartedGradient}>
+          <TouchableOpacity style={styles.getStartedButton} activeOpacity={0.9}>
+            <LinearGradient
+              colors={["#3B82F6", "#2563EB"]}
+              style={styles.getStartedGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
               <Text style={styles.getStartedText}>Get Started</Text>
             </LinearGradient>
           </TouchableOpacity>
@@ -233,7 +228,9 @@ export default function StatisticsScreen() {
         <View style={[styles.card, { backgroundColor: colors.card }]}>
           <View style={styles.cardHeader}>
             <Text style={[styles.cardTitle, { color: colors.text }]}>Your Activities</Text>
-            <TrendingUp size={22} color="#3B82F6" />
+            <View style={styles.trendingBadge}>
+              <TrendingUp size={18} color="#10B981" strokeWidth={2.5} />
+            </View>
           </View>
 
           <DaySelector days={[12, 13, 14, 15]} selected={selectedDay} onSelect={setSelectedDay} />
@@ -261,26 +258,39 @@ export default function StatisticsScreen() {
 
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Weekly Overview</Text>
-          <BarChart data={stats.weeklyCalories} />
+          <View style={[styles.chartCard, { backgroundColor: colors.card }]}>
+            <BarChart data={stats.weeklyCalories} />
+          </View>
         </View>
 
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Today's Progress</Text>
-          <LinearGradient colors={["#1E293B", "#0F172A"]} style={styles.progressCard}>
+          <LinearGradient
+            colors={["#1E293B", "#0F172A"]}
+            style={styles.progressCard}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
             <Text style={styles.progressTitle}>Today's Stats Check</Text>
             <View style={styles.progressStats}>
               <View style={styles.progressStatItem}>
-                <Flame size={24} color="#F59E0B" />
+                <View style={styles.progressIconBg}>
+                  <Flame size={28} color="#F59E0B" strokeWidth={2.5} />
+                </View>
                 <Text style={styles.progressStatValue}>310</Text>
                 <Text style={styles.progressStatLabel}>Min</Text>
               </View>
               <View style={styles.progressStatItem}>
-                <Activity size={24} color="#8B5CF6" />
+                <View style={styles.progressIconBg}>
+                  <Activity size={28} color="#8B5CF6" strokeWidth={2.5} />
+                </View>
                 <Text style={styles.progressStatValue}>570</Text>
                 <Text style={styles.progressStatLabel}>Cal</Text>
               </View>
               <View style={styles.progressStatItem}>
-                <Target size={24} color="#10B981" />
+                <View style={styles.progressIconBg}>
+                  <Zap size={28} color="#10B981" strokeWidth={2.5} />
+                </View>
                 <Text style={styles.progressStatValue}>874</Text>
                 <Text style={styles.progressStatLabel}>Kcal</Text>
               </View>
@@ -294,7 +304,7 @@ export default function StatisticsScreen() {
             value={stats.totalCalories}
             unit="kcal"
             icon={Flame}
-            colors={["#F59E0B", "#D97706"]}
+            gradientColors={["#F59E0B", "#D97706"]}
             percentage={85}
           />
           <StatCard
@@ -302,7 +312,7 @@ export default function StatisticsScreen() {
             value={stats.avgCalories}
             unit="kcal"
             icon={Activity}
-            colors={["#8B5CF6", "#7C3AED"]}
+            gradientColors={["#8B5CF6", "#7C3AED"]}
             percentage={70}
           />
           <StatCard
@@ -310,7 +320,7 @@ export default function StatisticsScreen() {
             value={stats.totalProtein}
             unit="g"
             icon={Dumbbell}
-            colors={["#10B981", "#059669"]}
+            gradientColors={["#10B981", "#059669"]}
             percentage={65}
           />
           <StatCard
@@ -318,7 +328,7 @@ export default function StatisticsScreen() {
             value={stats.totalMeals}
             unit="meals"
             icon={Target}
-            colors={["#3B82F6", "#2563EB"]}
+            gradientColors={["#3B82F6", "#2563EB"]}
             percentage={90}
           />
         </View>
@@ -333,210 +343,258 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
-    paddingBottom: 100,
+    paddingBottom: 120,
   },
   motivationalCard: {
-    borderRadius: 24,
-    padding: 32,
-    marginBottom: 20,
+    borderRadius: 28,
+    padding: 36,
+    marginBottom: 24,
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowColor: "#1E3A8A",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
   },
-  motivationalIcon: {
-    marginBottom: 16,
+  motivationalIconContainer: {
+    marginBottom: 20,
   },
   motivationalTitle: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: "900",
     color: "#fff",
     textAlign: "center",
+    letterSpacing: 0.5,
   },
   motivationalSubtitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "700",
     color: "rgba(255,255,255,0.95)",
     textAlign: "center",
-    marginBottom: 24,
+    marginBottom: 28,
+    letterSpacing: 0.3,
   },
   getStartedButton: {
-    borderRadius: 16,
+    borderRadius: 18,
     overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowColor: "#3B82F6",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 6,
   },
   getStartedGradient: {
-    paddingHorizontal: 40,
-    paddingVertical: 14,
+    paddingHorizontal: 48,
+    paddingVertical: 16,
   },
   getStartedText: {
     color: "#fff",
-    fontSize: 17,
-    fontWeight: "800",
+    fontSize: 18,
+    fontWeight: "900",
+    letterSpacing: 0.5,
   },
   card: {
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 20,
+    borderRadius: 28,
+    padding: 24,
+    marginBottom: 24,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 6,
   },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 24,
   },
   cardTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "900",
+    letterSpacing: 0.3,
+  },
+  trendingBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#D1FAE5",
+    alignItems: "center",
+    justifyContent: "center",
   },
   section: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: "800",
+    fontSize: 22,
+    fontWeight: "900",
     marginBottom: 16,
+    letterSpacing: 0.3,
   },
   daySelector: {
     flexDirection: "row",
     justifyContent: "space-around",
-    marginBottom: 24,
-    gap: 8,
+    marginBottom: 28,
+    gap: 10,
   },
   dayButton: {
     flex: 1,
-    height: 52,
-    borderRadius: 14,
+    height: 56,
+    borderRadius: 16,
     backgroundColor: "#F3F4F6",
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   dayButtonActive: {
     backgroundColor: "#3B82F6",
+    shadowColor: "#3B82F6",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   dayButtonText: {
-    fontSize: 17,
-    fontWeight: "800",
+    fontSize: 18,
+    fontWeight: "900",
     color: "#6B7280",
   },
   dayButtonTextActive: {
     color: "#fff",
   },
   lineChartContainer: {
-    minHeight: 120,
-    marginBottom: 16,
+    minHeight: 140,
+    marginBottom: 20,
   },
   lineChart: {
     flexDirection: "row",
     justifyContent: "space-around",
     alignItems: "flex-end",
-    height: 120,
+    height: 140,
     paddingHorizontal: 8,
   },
   lineBarWrapper: {
     flex: 1,
     alignItems: "center",
-    marginHorizontal: 4,
+    marginHorizontal: 6,
   },
   lineBarBg: {
     width: "100%",
-    height: 100,
+    height: 120,
     justifyContent: "flex-end",
-    marginBottom: 8,
+    marginBottom: 10,
   },
   lineBar: {
     width: "100%",
-    borderRadius: 8,
+    borderRadius: 12,
     minHeight: 8,
+    shadowColor: "#8B5CF6",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   lineBarLabel: {
-    fontSize: 13,
-    fontWeight: "700",
+    fontSize: 14,
+    fontWeight: "800",
     color: "#6B7280",
   },
   statsRow: {
     flexDirection: "row",
-    gap: 12,
+    gap: 14,
   },
   smallStatCard: {
     flex: 1,
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 20,
+    padding: 18,
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
   smallStatValue: {
-    fontSize: 22,
+    fontSize: 26,
     fontWeight: "900",
     color: "#1F2937",
-    marginBottom: 4,
+    marginBottom: 6,
   },
   smallStatLabel: {
-    fontSize: 12,
-    fontWeight: "700",
+    fontSize: 13,
+    fontWeight: "800",
     color: "#6B7280",
   },
+  chartCard: {
+    borderRadius: 28,
+    padding: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 6,
+  },
   chartContainer: {
-    marginBottom: 16,
+    minHeight: 200,
   },
   barsContainer: {
     flexDirection: "row",
     justifyContent: "space-around",
     alignItems: "flex-end",
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
+    height: 180,
   },
   barWrapper: {
     flex: 1,
     alignItems: "center",
-    marginHorizontal: 3,
+    marginHorizontal: 4,
   },
   barBackground: {
     width: "100%",
-    height: 140,
+    height: 160,
     justifyContent: "flex-end",
-    marginBottom: 8,
+    marginBottom: 10,
   },
   bar: {
     width: "100%",
-    borderRadius: 8,
-    minHeight: 4,
+    borderRadius: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 4,
   },
   barLabel: {
-    fontSize: 11,
-    fontWeight: "700",
+    fontSize: 12,
+    fontWeight: "800",
     color: "#6B7280",
     marginBottom: 4,
   },
   barValue: {
-    fontSize: 10,
-    fontWeight: "600",
+    fontSize: 11,
+    fontWeight: "700",
     color: "#9CA3AF",
   },
   progressCard: {
-    borderRadius: 20,
-    padding: 24,
+    borderRadius: 28,
+    padding: 28,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 8,
   },
   progressTitle: {
-    fontSize: 18,
-    fontWeight: "800",
+    fontSize: 20,
+    fontWeight: "900",
     color: "#fff",
-    marginBottom: 20,
+    marginBottom: 24,
     textAlign: "center",
+    letterSpacing: 0.5,
   },
   progressStats: {
     flexDirection: "row",
@@ -545,72 +603,91 @@ const styles = StyleSheet.create({
   progressStatItem: {
     alignItems: "center",
   },
+  progressIconBg: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
   progressStatValue: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: "900",
     color: "#fff",
-    marginTop: 8,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   progressStatLabel: {
-    fontSize: 13,
-    fontWeight: "700",
+    fontSize: 14,
+    fontWeight: "800",
     color: "rgba(255,255,255,0.8)",
   },
   statsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 12,
+    gap: 14,
+    marginBottom: 24,
   },
   statCardWrapper: {
     width: "48%",
   },
   statCard: {
-    borderRadius: 20,
-    padding: 20,
+    borderRadius: 24,
+    padding: 22,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
     shadowRadius: 12,
     elevation: 6,
   },
   statCardHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 14,
+    gap: 10,
+  },
+  statCardIconBg: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255, 255, 255, 0.25)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   statCardTitle: {
-    fontSize: 13,
-    fontWeight: "700",
+    fontSize: 14,
+    fontWeight: "800",
     color: "rgba(255,255,255,0.95)",
+    flex: 1,
   },
   statCardValue: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: "900",
     color: "#fff",
-    marginBottom: 8,
+    marginBottom: 12,
+    letterSpacing: 0.3,
   },
   statCardUnit: {
-    fontSize: 15,
-    fontWeight: "600",
+    fontSize: 16,
+    fontWeight: "700",
   },
   percentageBar: {
-    height: 6,
-    backgroundColor: "rgba(255,255,255,0.3)",
-    borderRadius: 3,
+    height: 8,
+    backgroundColor: "rgba(255,255,255,0.25)",
+    borderRadius: 4,
     overflow: "hidden",
   },
   percentageFill: {
     height: "100%",
     backgroundColor: "#fff",
-    borderRadius: 3,
+    borderRadius: 4,
   },
   noDataText: {
     textAlign: "center",
     color: "#9CA3AF",
-    fontSize: 14,
-    fontWeight: "600",
-    paddingVertical: 40,
+    fontSize: 15,
+    fontWeight: "700",
+    paddingVertical: 50,
   },
 });

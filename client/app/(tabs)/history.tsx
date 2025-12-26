@@ -16,12 +16,12 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState, AppDispatch } from "@/src/store";
 import { fetchMeals } from "@/src/store/mealSlice";
-import { CheckCircle, X, BookOpen, Trophy, Star } from "lucide-react-native";
+import { Check, X, BookOpen, Trophy, Star, Flame, TrendingUp } from "lucide-react-native";
 import { useTheme } from "@/src/context/ThemeContext";
 
 const { width, height } = Dimensions.get("window");
-const CIRCLE_SIZE = 110;
-const SEGMENT_SIZE = 18;
+const CIRCLE_SIZE = 100;
+const SEGMENT_SIZE = 16;
 
 interface DayData {
   date: string;
@@ -32,14 +32,13 @@ interface DayData {
   daysPast: number;
 }
 
-const MealSegment = ({ meal, index, totalMeals }: any) => {
-  const angle = (index / 5) * 360 - 90;
-  const radius = CIRCLE_SIZE / 2 + 12;
-  const x = Math.cos((angle * Math.PI) / 180) * radius;
-  const y = Math.sin((angle * Math.PI) / 180) * radius;
+const MealSegment = ({ meal, angle }: { meal: any; angle: number }) => {
+  const radius = CIRCLE_SIZE / 2 + 10;
+  const radians = (angle * Math.PI) / 180;
+  const x = Math.cos(radians) * radius;
+  const y = Math.sin(radians) * radius;
 
-  const initial = meal?.meal_name?.charAt(0)?.toUpperCase() || "M";
-  const color = "#00CED1";
+  const initial = meal?.meal_name?.charAt(0)?.toUpperCase() || meal?.name?.charAt(0)?.toUpperCase() || "M";
 
   return (
     <View
@@ -48,7 +47,6 @@ const MealSegment = ({ meal, index, totalMeals }: any) => {
         {
           left: CIRCLE_SIZE / 2 + x - SEGMENT_SIZE / 2,
           top: CIRCLE_SIZE / 2 + y - SEGMENT_SIZE / 2,
-          backgroundColor: color,
         },
       ]}
     >
@@ -57,11 +55,11 @@ const MealSegment = ({ meal, index, totalMeals }: any) => {
   );
 };
 
-const EmptySegment = ({ index }: any) => {
-  const angle = (index / 5) * 360 - 90;
-  const radius = CIRCLE_SIZE / 2 + 12;
-  const x = Math.cos((angle * Math.PI) / 180) * radius;
-  const y = Math.sin((angle * Math.PI) / 180) * radius;
+const EmptySegment = ({ angle }: { angle: number }) => {
+  const radius = CIRCLE_SIZE / 2 + 10;
+  const radians = (angle * Math.PI) / 180;
+  const x = Math.cos(radians) * radius;
+  const y = Math.sin(radians) * radius;
 
   return (
     <View
@@ -76,11 +74,27 @@ const EmptySegment = ({ index }: any) => {
   );
 };
 
-const DayCircle = ({ day, onPress, position }: any) => {
-  const isLeft = position === "left";
-  const isRight = position === "right";
-  const isCenter = position === "center";
+const PathLine = ({ fromPosition, toPosition }: { fromPosition: "left" | "center" | "right"; toPosition: "left" | "center" | "right" }) => {
+  if (fromPosition === toPosition) {
+    return <View style={styles.straightLine} />;
+  }
 
+  const isLeftToCenter = fromPosition === "left" && toPosition === "center";
+  const isCenterToRight = fromPosition === "center" && toPosition === "right";
+  const isRightToCenter = fromPosition === "right" && toPosition === "center";
+  const isCenterToLeft = fromPosition === "center" && toPosition === "left";
+
+  let lineStyle = styles.diagonalLineRight;
+  if (isLeftToCenter || isCenterToLeft) {
+    lineStyle = styles.diagonalLineRight;
+  } else if (isCenterToRight || isRightToCenter) {
+    lineStyle = styles.diagonalLineLeft;
+  }
+
+  return <View style={[styles.pathLine, lineStyle]} />;
+};
+
+const DayCircle = ({ day, position, index }: { day: DayData; position: "left" | "center" | "right"; index: number }) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const dayDate = new Date(day.date);
@@ -88,110 +102,100 @@ const DayCircle = ({ day, onPress, position }: any) => {
   const isPast = dayDate < today;
   const isToday = dayDate.getTime() === today.getTime();
 
-  let circleColor = "#E0E0E0";
-  let borderColor = "#D0D0D0";
+  let circleColor = "#E5E7EB";
+  let borderColor = "#D1D5DB";
 
   if (day.goalMet) {
-    circleColor = "#00CED1";
-    borderColor = "#00B8B8";
+    circleColor = "#58CC02";
+    borderColor = "#47A302";
   } else if (day.mealCount > 0) {
     circleColor = "#FFA500";
     borderColor = "#FF8C00";
   } else if (isPast && !isToday) {
-    circleColor = "#FF6B6B";
-    borderColor = "#FF5252";
+    circleColor = "#FF4B4B";
+    borderColor = "#E03E3E";
   }
 
-  const containerStyle = isLeft
-    ? styles.dayContainerLeft
-    : isRight
-    ? styles.dayContainerRight
-    : styles.dayContainerCenter;
+  const segmentAngles = [-90, 0, 90, 180, 45];
 
   return (
-    <View style={containerStyle}>
-      <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
-        <View style={styles.circleWrapper}>
-          <View
-            style={[
-              styles.circleShadow,
-              { backgroundColor: circleColor, opacity: 0.3 },
-            ]}
-          />
+    <View style={styles.circleWrapper}>
+      <View
+        style={[
+          styles.circleShadow,
+          { backgroundColor: circleColor, opacity: 0.25 },
+        ]}
+      />
 
-          <View
-            style={[
-              styles.circle,
-              { backgroundColor: circleColor, borderColor: borderColor },
-            ]}
-          >
-            {day.goalMet ? (
-              <CheckCircle size={48} color="#fff" strokeWidth={3} />
-            ) : (
-              <Text style={styles.dayNumber}>
-                {new Date(day.date).getDate()}
-              </Text>
-            )}
-          </View>
+      <View
+        style={[
+          styles.circle,
+          { backgroundColor: circleColor, borderColor: borderColor },
+        ]}
+      >
+        {day.goalMet ? (
+          <Check size={44} color="#fff" strokeWidth={4} />
+        ) : (
+          <Text style={styles.dayNumber}>
+            {new Date(day.date).getDate()}
+          </Text>
+        )}
+      </View>
 
-          {[...Array(5)].map((_, i) =>
-            i < day.mealCount ? (
-              <MealSegment
-                key={i}
-                meal={day.meals[i]}
-                index={i}
-                totalMeals={day.mealCount}
-              />
-            ) : (
-              <EmptySegment key={i} index={i} />
-            )
-          )}
+      {segmentAngles.map((angle, i) =>
+        i < day.mealCount && day.meals[i] ? (
+          <MealSegment key={i} meal={day.meals[i]} angle={angle} />
+        ) : (
+          <EmptySegment key={i} angle={angle} />
+        )
+      )}
 
-          {isToday && (
-            <View style={styles.todayBadge}>
-              <Text style={styles.todayText}>TODAY</Text>
-            </View>
-          )}
+      {isToday && (
+        <View style={styles.todayBadge}>
+          <Text style={styles.todayText}>TODAY</Text>
         </View>
-
-        <Text style={styles.dateLabel}>
-          {new Date(day.date).toLocaleDateString("en", {
-            month: "short",
-            day: "numeric",
-          })}
-        </Text>
-      </TouchableOpacity>
+      )}
     </View>
   );
 };
 
-const ChestRewardModal = ({ visible, onClose, xpEarned }: any) => {
+const ChestRewardModal = ({ visible, onClose, xpEarned }: { visible: boolean; onClose: () => void; xpEarned: number }) => {
   const [scaleAnim] = useState(new Animated.Value(0));
-  const [rotateAnim] = useState(new Animated.Value(0));
+  const [sparkleAnim] = useState(new Animated.Value(0));
 
   useEffect(() => {
     if (visible) {
-      Animated.sequence([
+      Animated.parallel([
         Animated.spring(scaleAnim, {
           toValue: 1,
-          tension: 50,
-          friction: 7,
+          tension: 40,
+          friction: 6,
           useNativeDriver: true,
         }),
-        Animated.timing(rotateAnim, {
-          toValue: 1,
-          duration: 500,
-          easing: Easing.ease,
-          useNativeDriver: true,
-        }),
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(sparkleAnim, {
+              toValue: 1,
+              duration: 1000,
+              easing: Easing.ease,
+              useNativeDriver: true,
+            }),
+            Animated.timing(sparkleAnim, {
+              toValue: 0,
+              duration: 1000,
+              easing: Easing.ease,
+              useNativeDriver: true,
+            }),
+          ])
+        ),
       ]).start();
     } else {
       scaleAnim.setValue(0);
-      rotateAnim.setValue(0);
+      sparkleAnim.setValue(0);
     }
   }, [visible]);
 
-  const rotate = rotateAnim.interpolate({
+  const sparkleRotate = sparkleAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ["0deg", "360deg"],
   });
@@ -202,21 +206,31 @@ const ChestRewardModal = ({ visible, onClose, xpEarned }: any) => {
         <Animated.View
           style={[
             styles.rewardContent,
-            { transform: [{ scale: scaleAnim }, { rotate }] },
+            { transform: [{ scale: scaleAnim }] },
           ]}
         >
-          <LinearGradient
-            colors={["#FFD700", "#FFA500", "#FF8C00"]}
-            style={styles.chestContainer}
-          >
-            <Trophy size={80} color="#fff" />
-          </LinearGradient>
+          <Animated.View style={{ transform: [{ rotate: sparkleRotate }] }}>
+            <LinearGradient
+              colors={["#FFD700", "#FFA500", "#FF8C00"]}
+              style={styles.chestContainer}
+            >
+              <Trophy size={80} color="#fff" />
+            </LinearGradient>
+          </Animated.View>
 
           <Text style={styles.rewardTitle}>Goal Achieved!</Text>
-          <Text style={styles.rewardXP}>+{xpEarned} XP</Text>
+          <View style={styles.xpBadge}>
+            <Star size={28} color="#FFD700" fill="#FFD700" />
+            <Text style={styles.rewardXP}>+{xpEarned} XP</Text>
+          </View>
 
           <TouchableOpacity style={styles.rewardButton} onPress={onClose}>
-            <Text style={styles.rewardButtonText}>Claim Reward</Text>
+            <LinearGradient
+              colors={["#58CC02", "#47A302"]}
+              style={styles.rewardButtonGradient}
+            >
+              <Text style={styles.rewardButtonText}>Claim Reward</Text>
+            </LinearGradient>
           </TouchableOpacity>
         </Animated.View>
       </View>
@@ -224,7 +238,7 @@ const ChestRewardModal = ({ visible, onClose, xpEarned }: any) => {
   );
 };
 
-const DayDetailModal = ({ visible, day, onClose }: any) => {
+const DayDetailModal = ({ visible, day, onClose }: { visible: boolean; day: DayData | null; onClose: () => void }) => {
   const { colors } = useTheme();
 
   if (!day) return null;
@@ -240,81 +254,81 @@ const DayDetailModal = ({ visible, day, onClose }: any) => {
 
         <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
           <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>
-              {new Date(day.date).toLocaleDateString("en", {
-                weekday: "long",
-                month: "long",
-                day: "numeric",
-              })}
-            </Text>
-            <TouchableOpacity onPress={onClose}>
-              <X size={24} color={colors.text} />
+            <View style={styles.modalTitleContainer}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>
+                {new Date(day.date).toLocaleDateString("en", {
+                  weekday: "long",
+                  month: "long",
+                  day: "numeric",
+                })}
+              </Text>
+              {day.goalMet && (
+                <View style={styles.completeBadge}>
+                  <Check size={16} color="#fff" strokeWidth={3} />
+                  <Text style={styles.completeBadgeText}>Complete</Text>
+                </View>
+              )}
+            </View>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <X size={28} color={colors.text} />
             </TouchableOpacity>
           </View>
 
           <View style={styles.modalStats}>
             <View style={styles.modalStatItem}>
+              <LinearGradient colors={["#FF6B6B", "#FF5252"]} style={styles.statIconContainer}>
+                <Flame size={24} color="#fff" />
+              </LinearGradient>
               <Text style={[styles.modalStatValue, { color: colors.text }]}>
                 {day.totalCalories}
               </Text>
-              <Text
-                style={[styles.modalStatLabel, { color: colors.textSecondary }]}
-              >
+              <Text style={[styles.modalStatLabel, { color: colors.textSecondary }]}>
                 Calories
               </Text>
             </View>
             <View style={styles.modalStatItem}>
+              <LinearGradient colors={["#58CC02", "#47A302"]} style={styles.statIconContainer}>
+                <Trophy size={24} color="#fff" />
+              </LinearGradient>
               <Text style={[styles.modalStatValue, { color: colors.text }]}>
-                {day.mealCount}
+                {day.mealCount}/5
               </Text>
-              <Text
-                style={[styles.modalStatLabel, { color: colors.textSecondary }]}
-              >
+              <Text style={[styles.modalStatLabel, { color: colors.textSecondary }]}>
                 Meals
               </Text>
             </View>
             <View style={styles.modalStatItem}>
+              <LinearGradient colors={["#FFA500", "#FF8C00"]} style={styles.statIconContainer}>
+                <TrendingUp size={24} color="#fff" />
+              </LinearGradient>
               <Text style={[styles.modalStatValue, { color: colors.text }]}>
                 {day.goalMet ? "100" : Math.round((day.mealCount / 5) * 100)}%
               </Text>
-              <Text
-                style={[styles.modalStatLabel, { color: colors.textSecondary }]}
-              >
+              <Text style={[styles.modalStatLabel, { color: colors.textSecondary }]}>
                 Progress
               </Text>
             </View>
           </View>
 
-          <ScrollView style={styles.mealsList}>
+          <ScrollView style={styles.mealsList} showsVerticalScrollIndicator={false}>
             {day.meals.length > 0 ? (
               day.meals.map((meal: any, idx: number) => (
-                <View
-                  key={idx}
-                  style={[styles.mealCard, { backgroundColor: colors.surface }]}
-                >
+                <View key={idx} style={[styles.mealCard, { backgroundColor: colors.surface }]}>
                   <View style={styles.mealCardHeader}>
-                    <View
-                      style={[
-                        styles.mealInitialBig,
-                        { backgroundColor: "#00CED1" },
-                      ]}
+                    <LinearGradient
+                      colors={["#58CC02", "#47A302"]}
+                      style={styles.mealInitialBig}
                     >
                       <Text style={styles.mealInitialBigText}>
-                        {meal.meal_name?.charAt(0)?.toUpperCase() || "M"}
+                        {meal.meal_name?.charAt(0)?.toUpperCase() || meal.name?.charAt(0)?.toUpperCase() || "M"}
                       </Text>
-                    </View>
+                    </LinearGradient>
                     <View style={styles.mealCardInfo}>
                       <Text style={[styles.mealName, { color: colors.text }]}>
                         {meal.meal_name || meal.name || "Meal"}
                       </Text>
-                      <Text
-                        style={[
-                          styles.mealDetail,
-                          { color: colors.textSecondary },
-                        ]}
-                      >
-                        {Math.round(meal.calories || 0)} kcal •{" "}
-                        {meal.meal_period || "Meal"}
+                      <Text style={[styles.mealDetail, { color: colors.textSecondary }]}>
+                        {Math.round(meal.calories || 0)} kcal • {meal.meal_period || "Meal"}
                       </Text>
                     </View>
                   </View>
@@ -322,28 +336,20 @@ const DayDetailModal = ({ visible, day, onClose }: any) => {
               ))
             ) : (
               <View style={styles.noMealsContainer}>
-                <BookOpen size={48} color={colors.textSecondary} />
+                <BookOpen size={56} color={colors.textSecondary} opacity={0.5} />
                 <Text style={[styles.noMeals, { color: colors.textSecondary }]}>
                   No meals logged yet
                 </Text>
-                <Text
-                  style={[
-                    styles.noMealsHint,
-                    { color: colors.textSecondary },
-                  ]}
-                >
+                <Text style={[styles.noMealsHint, { color: colors.textSecondary }]}>
                   Tap the camera icon to add your first meal
                 </Text>
               </View>
             )}
           </ScrollView>
 
-          <TouchableOpacity
-            style={styles.closeBtn}
-            onPress={onClose}
-          >
+          <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
             <LinearGradient
-              colors={["#00CED1", "#00B8B8"]}
+              colors={["#58CC02", "#47A302"]}
               style={styles.closeBtnGradient}
             >
               <Text style={styles.closeBtnText}>Close</Text>
@@ -416,13 +422,6 @@ export default function HistoryScreen() {
 
     days.forEach((day) => {
       day.goalMet = day.mealCount >= 5;
-
-      if (day.goalMet && Math.random() > 0.7) {
-        setTimeout(() => {
-          setXpEarned(Math.floor(Math.random() * 50) + 50);
-          setShowChestModal(true);
-        }, 500);
-      }
     });
 
     return days;
@@ -437,6 +436,13 @@ export default function HistoryScreen() {
   const handleDayPress = (day: DayData) => {
     setSelectedDay(day);
     setModalVisible(true);
+
+    if (day.goalMet && Math.random() > 0.5) {
+      setTimeout(() => {
+        setXpEarned(Math.floor(Math.random() * 50) + 50);
+        setShowChestModal(true);
+      }, 300);
+    }
   };
 
   const streak = useMemo(() => {
@@ -448,25 +454,25 @@ export default function HistoryScreen() {
     return count;
   }, [daysData]);
 
+  const totalGoals = useMemo(() => {
+    return daysData.filter((d) => d.goalMet).length;
+  }, [daysData]);
+
   return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: colors.background }]}
-    >
+    <SafeAreaView style={[styles.container, { backgroundColor: "#F8F9FA" }]}>
       <LinearGradient
-        colors={["#00CED1", "#00B8B8", "#009999"]}
+        colors={["#58CC02", "#47A302"]}
         style={styles.header}
       >
         <Text style={styles.headerTitle}>Your Journey</Text>
         <View style={styles.headerStats}>
           <View style={styles.statBadge}>
-            <Star size={18} color="#FFD700" fill="#FFD700" />
+            <Flame size={20} color="#FFD700" />
             <Text style={styles.statBadgeText}>{streak} Day Streak</Text>
           </View>
           <View style={styles.statBadge}>
-            <Trophy size={18} color="#FFD700" />
-            <Text style={styles.statBadgeText}>
-              {daysData.filter((d) => d.goalMet).length} Goals
-            </Text>
+            <Trophy size={20} color="#FFD700" />
+            <Text style={styles.statBadgeText}>{totalGoals} Goals</Text>
           </View>
         </View>
       </LinearGradient>
@@ -479,29 +485,43 @@ export default function HistoryScreen() {
         }
       >
         {daysData.map((day, index) => {
-          let position = "center";
-          if (index % 3 === 0) position = "left";
-          if (index % 3 === 1) position = "center";
-          if (index % 3 === 2) position = "right";
+          const position = index % 3 === 0 ? "left" : index % 3 === 1 ? "center" : "right";
+          const nextPosition = (index + 1) % 3 === 0 ? "left" : (index + 1) % 3 === 1 ? "center" : "right";
 
           return (
-            <React.Fragment key={day.date}>
-              <DayCircle
-                day={day}
+            <View key={day.date} style={styles.dayItemContainer}>
+              <TouchableOpacity
                 onPress={() => handleDayPress(day)}
-                position={position}
-              />
+                activeOpacity={0.8}
+                style={[
+                  styles.dayContainer,
+                  position === "left" && styles.dayContainerLeft,
+                  position === "center" && styles.dayContainerCenter,
+                  position === "right" && styles.dayContainerRight,
+                ]}
+              >
+                <DayCircle day={day} position={position} index={index} />
+                <Text style={styles.dateLabel}>
+                  {new Date(day.date).toLocaleDateString("en", {
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </Text>
+              </TouchableOpacity>
+
               {index < daysData.length - 1 && (
                 <View
                   style={[
-                    styles.pathConnector,
-                    position === "left" && styles.pathConnectorLeft,
-                    position === "center" && styles.pathConnectorCenter,
-                    position === "right" && styles.pathConnectorRight,
+                    styles.pathLineContainer,
+                    position === "left" && styles.pathLineLeft,
+                    position === "center" && styles.pathLineCenter,
+                    position === "right" && styles.pathLineRight,
                   ]}
-                />
+                >
+                  <PathLine fromPosition={position} toPosition={nextPosition} />
+                </View>
               )}
-            </React.Fragment>
+            </View>
           );
         })}
       </ScrollView>
@@ -528,10 +548,10 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 24,
     paddingTop: 20,
-    paddingBottom: 24,
+    paddingBottom: 28,
   },
   headerTitle: {
-    fontSize: 32,
+    fontSize: 34,
     fontWeight: "900",
     color: "#fff",
     marginBottom: 16,
@@ -543,34 +563,38 @@ const styles = StyleSheet.create({
   statBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.25)",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 6,
+    backgroundColor: "rgba(255, 255, 255, 0.3)",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 24,
+    gap: 8,
   },
   statBadgeText: {
     color: "#fff",
-    fontSize: 13,
-    fontWeight: "700",
+    fontSize: 14,
+    fontWeight: "800",
   },
   scrollContent: {
     paddingTop: 40,
-    paddingBottom: 120,
+    paddingBottom: 140,
+  },
+  dayItemContainer: {
+    marginBottom: 16,
+  },
+  dayContainer: {
+    alignItems: "center",
+    paddingVertical: 8,
   },
   dayContainerLeft: {
     alignItems: "flex-start",
-    paddingLeft: 40,
-    marginBottom: 20,
+    paddingLeft: 50,
   },
   dayContainerCenter: {
     alignItems: "center",
-    marginBottom: 20,
   },
   dayContainerRight: {
     alignItems: "flex-end",
-    paddingRight: 40,
-    marginBottom: 20,
+    paddingRight: 50,
   },
   circleWrapper: {
     position: "relative",
@@ -578,11 +602,11 @@ const styles = StyleSheet.create({
     height: CIRCLE_SIZE,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 8,
+    marginBottom: 12,
   },
   circleShadow: {
     position: "absolute",
-    bottom: -6,
+    bottom: -5,
     width: CIRCLE_SIZE,
     height: CIRCLE_SIZE,
     borderRadius: CIRCLE_SIZE / 2,
@@ -593,7 +617,7 @@ const styles = StyleSheet.create({
     borderRadius: CIRCLE_SIZE / 2,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 5,
+    borderWidth: 6,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
@@ -601,7 +625,7 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   dayNumber: {
-    fontSize: 36,
+    fontSize: 38,
     fontWeight: "900",
     color: "#fff",
   },
@@ -612,7 +636,8 @@ const styles = StyleSheet.create({
     borderRadius: SEGMENT_SIZE / 2,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 2,
+    backgroundColor: "#58CC02",
+    borderWidth: 3,
     borderColor: "#fff",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -621,7 +646,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   mealInitial: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: "900",
     color: "#fff",
   },
@@ -630,51 +655,69 @@ const styles = StyleSheet.create({
     width: SEGMENT_SIZE,
     height: SEGMENT_SIZE,
     borderRadius: SEGMENT_SIZE / 2,
-    backgroundColor: "#F0F0F0",
-    borderWidth: 2,
-    borderColor: "#E0E0E0",
+    backgroundColor: "#E5E7EB",
+    borderWidth: 3,
+    borderColor: "#D1D5DB",
   },
   todayBadge: {
     position: "absolute",
-    bottom: -20,
-    backgroundColor: "#00CED1",
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+    bottom: -24,
+    backgroundColor: "#58CC02",
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.15,
     shadowRadius: 4,
-    elevation: 2,
+    elevation: 3,
   },
   todayText: {
     color: "#fff",
-    fontSize: 10,
-    fontWeight: "800",
+    fontSize: 11,
+    fontWeight: "900",
   },
   dateLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#666",
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#6B7280",
     textAlign: "center",
   },
-  pathConnector: {
-    height: 40,
-    width: 4,
-    backgroundColor: "#E0E0E0",
-    marginBottom: 10,
+  pathLineContainer: {
+    height: 50,
+    justifyContent: "center",
   },
-  pathConnectorLeft: {
-    marginLeft: 40 + CIRCLE_SIZE / 2 - 2,
-    transform: [{ rotate: "30deg" }],
+  pathLineLeft: {
+    marginLeft: 50 + CIRCLE_SIZE / 2,
   },
-  pathConnectorCenter: {
+  pathLineCenter: {
     alignSelf: "center",
   },
-  pathConnectorRight: {
-    marginRight: 40 + CIRCLE_SIZE / 2 - 2,
+  pathLineRight: {
+    marginRight: 50 + CIRCLE_SIZE / 2,
     alignSelf: "flex-end",
-    transform: [{ rotate: "-30deg" }],
+  },
+  pathLine: {
+    width: 4,
+    height: 50,
+    backgroundColor: "#D1D5DB",
+  },
+  straightLine: {
+    width: 4,
+    height: 50,
+    backgroundColor: "#D1D5DB",
+  },
+  diagonalLineRight: {
+    width: 4,
+    height: 60,
+    backgroundColor: "#D1D5DB",
+    transform: [{ rotate: "25deg" }],
+  },
+  diagonalLineLeft: {
+    width: 4,
+    height: 60,
+    backgroundColor: "#D1D5DB",
+    transform: [{ rotate: "-25deg" }],
   },
   modalOverlay: {
     flex: 1,
@@ -682,10 +725,10 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalContent: {
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    maxHeight: height * 0.75,
-    paddingTop: 24,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    maxHeight: height * 0.8,
+    paddingTop: 28,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.2,
@@ -695,61 +738,101 @@ const styles = StyleSheet.create({
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
     paddingHorizontal: 24,
-    marginBottom: 24,
+    marginBottom: 28,
+  },
+  modalTitleContainer: {
+    flex: 1,
+    paddingRight: 12,
   },
   modalTitle: {
-    fontSize: 22,
+    fontSize: 24,
+    fontWeight: "900",
+    marginBottom: 8,
+  },
+  completeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#58CC02",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    alignSelf: "flex-start",
+    gap: 4,
+  },
+  completeBadgeText: {
+    color: "#fff",
+    fontSize: 12,
     fontWeight: "800",
-    flex: 1,
+  },
+  closeButton: {
+    padding: 4,
   },
   modalStats: {
     flexDirection: "row",
     justifyContent: "space-around",
     paddingHorizontal: 24,
-    marginBottom: 24,
+    marginBottom: 28,
   },
   modalStatItem: {
     alignItems: "center",
   },
+  statIconContainer: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+  },
   modalStatValue: {
-    fontSize: 32,
+    fontSize: 30,
     fontWeight: "900",
+    marginBottom: 4,
   },
   modalStatLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    marginTop: 4,
+    fontSize: 14,
+    fontWeight: "700",
   },
   mealsList: {
     paddingHorizontal: 24,
     maxHeight: height * 0.4,
   },
   mealCard: {
-    borderRadius: 16,
-    marginBottom: 12,
+    borderRadius: 18,
+    marginBottom: 14,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.08,
     shadowRadius: 8,
-    elevation: 2,
+    elevation: 3,
   },
   mealCardHeader: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 16,
+    padding: 18,
   },
   mealInitialBig: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
+    marginRight: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
   },
   mealInitialBigText: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "900",
     color: "#fff",
   },
@@ -757,32 +840,33 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   mealName: {
-    fontSize: 17,
-    fontWeight: "700",
-    marginBottom: 4,
+    fontSize: 18,
+    fontWeight: "800",
+    marginBottom: 6,
   },
   mealDetail: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "600",
   },
   noMealsContainer: {
     alignItems: "center",
-    paddingVertical: 48,
+    paddingVertical: 60,
   },
   noMeals: {
-    fontSize: 18,
-    fontWeight: "700",
-    marginTop: 16,
-    marginBottom: 8,
+    fontSize: 19,
+    fontWeight: "800",
+    marginTop: 20,
+    marginBottom: 10,
   },
   noMealsHint: {
-    fontSize: 14,
-    fontWeight: "500",
+    fontSize: 15,
+    fontWeight: "600",
     textAlign: "center",
+    opacity: 0.7,
   },
   closeBtn: {
     margin: 24,
-    borderRadius: 16,
+    borderRadius: 18,
     overflow: "hidden",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
@@ -791,57 +875,74 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   closeBtnGradient: {
-    paddingVertical: 16,
+    paddingVertical: 18,
     alignItems: "center",
   },
   closeBtnText: {
     color: "#fff",
-    fontSize: 17,
-    fontWeight: "800",
+    fontSize: 18,
+    fontWeight: "900",
   },
   rewardOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.8)",
+    backgroundColor: "rgba(0, 0, 0, 0.85)",
     alignItems: "center",
     justifyContent: "center",
   },
   rewardContent: {
     alignItems: "center",
+    padding: 24,
   },
   chestContainer: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 24,
+    marginBottom: 32,
     shadowColor: "#FFD700",
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.6,
-    shadowRadius: 16,
-    elevation: 10,
+    shadowOpacity: 0.7,
+    shadowRadius: 20,
+    elevation: 12,
   },
   rewardTitle: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: "900",
     color: "#fff",
-    marginBottom: 12,
+    marginBottom: 20,
+  },
+  xpBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 215, 0, 0.2)",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+    marginBottom: 36,
+    gap: 12,
   },
   rewardXP: {
-    fontSize: 48,
+    fontSize: 42,
     fontWeight: "900",
     color: "#FFD700",
-    marginBottom: 32,
   },
   rewardButton: {
-    backgroundColor: "#00CED1",
-    paddingHorizontal: 48,
-    paddingVertical: 16,
-    borderRadius: 16,
+    borderRadius: 18,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  rewardButtonGradient: {
+    paddingHorizontal: 56,
+    paddingVertical: 18,
   },
   rewardButtonText: {
     color: "#fff",
-    fontSize: 18,
-    fontWeight: "800",
+    fontSize: 19,
+    fontWeight: "900",
   },
 });
