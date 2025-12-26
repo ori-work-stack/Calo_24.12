@@ -238,24 +238,28 @@ const HomeScreen = React.memo(() => {
   const loadWaterIntake = useCallback(async () => {
     if (!user?.user_id) return;
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-
     try {
       const today = new Date().toISOString().split("T")[0];
       const response = await api.get(`/nutrition/water-intake/${today}`, {
-        signal: controller.signal,
+        timeout: 8000,
       });
-      if (response.data.success) {
+      if (response.data?.success && response.data?.data) {
         const serverCups = response.data.data.cups_consumed || 0;
         setWaterCups(serverCups);
+      } else {
+        setWaterCups(0);
       }
     } catch (error: any) {
-      if (error.name !== "AbortError") {
-        console.error("Error loading water intake:", error);
+      const isCancelError =
+        error.code === "ECONNABORTED" ||
+        error.message === "canceled" ||
+        error.name === "CanceledError" ||
+        error.__CANCEL__;
+
+      if (!isCancelError) {
+        console.warn("Water intake load failed, using default:", error.message);
       }
-    } finally {
-      clearTimeout(timeoutId);
+      setWaterCups(0);
     }
   }, [user?.user_id]);
 
@@ -268,6 +272,8 @@ const HomeScreen = React.memo(() => {
         const response = await api.post("/nutrition/water-intake", {
           cups_consumed: totalCups,
           date: today,
+        }, {
+          timeout: 10000,
         });
 
         if (response.data.success) {
@@ -285,7 +291,15 @@ const HomeScreen = React.memo(() => {
           }
         }
       } catch (error: any) {
-        console.error("Error syncing water intake:", error);
+        const isCancelError =
+          error.code === "ECONNABORTED" ||
+          error.message === "canceled" ||
+          error.name === "CanceledError" ||
+          error.__CANCEL__;
+
+        if (!isCancelError) {
+          console.warn("Water sync failed, will retry:", error.message);
+        }
       }
     },
     [user?.user_id]
@@ -443,11 +457,26 @@ const HomeScreen = React.memo(() => {
   }, []);
 
   useEffect(() => {
-    if (user?.user_id && initialLoading) {
-      loadAllData(true);
-      loadWaterIntake();
-    }
-  }, [user?.user_id, loadAllData, initialLoading, loadWaterIntake]);
+    let isMounted = true;
+
+    const loadData = async () => {
+      if (user?.user_id && initialLoading && isMounted) {
+        await loadAllData(true);
+        if (isMounted) {
+          await loadWaterIntake();
+        }
+      }
+    };
+
+    loadData();
+
+    return () => {
+      isMounted = false;
+      if (waterSyncTimeoutRef.current) {
+        clearTimeout(waterSyncTimeoutRef.current);
+      }
+    };
+  }, [user?.user_id, initialLoading]);
 
   useEffect(() => {
     if (user?.user_id) {

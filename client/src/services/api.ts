@@ -63,6 +63,16 @@ const createApiInstance = (): AxiosInstance => {
   instance.interceptors.response.use(
     (response) => response,
     async (error: AxiosError) => {
+      // Handle canceled requests silently
+      if (
+        axios.isCancel(error) ||
+        error.code === "ERR_CANCELED" ||
+        error.code === "ECONNABORTED" ||
+        error.message === "canceled"
+      ) {
+        return Promise.reject(error);
+      }
+
       const originalRequest = error.config as any;
 
       // Handle network errors with retry
