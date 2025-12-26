@@ -9,6 +9,7 @@ import {
   Alert,
   Image,
   Platform,
+  ActivityIndicator,
 } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useLanguage } from "@/src/i18n/context/LanguageContext";
@@ -18,6 +19,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { userAPI } from "@/src/services/api";
 import { signOut } from "@/src/store/authSlice";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { LinearGradient } from "expo-linear-gradient";
+import { Lock, Mail, Shield, AlertCircle } from "lucide-react-native";
+import { useTheme } from "@/src/context/ThemeContext";
 
 interface EditProfileProps {
   onClose: () => void;
@@ -26,8 +30,10 @@ interface EditProfileProps {
 export default function EditProfile({ onClose }: EditProfileProps) {
   const { t, i18n } = useTranslation();
   const { isRTL } = useLanguage();
+  const { colors, isDark } = useTheme();
   const dispatch = useDispatch();
   const { user } = useSelector((state: RootState) => state.auth);
+
   const [profile, setProfile] = useState({
     name: user?.name || "",
     email: user?.email || "",
@@ -37,6 +43,14 @@ export default function EditProfile({ onClose }: EditProfileProps) {
     profile.birth_date ? new Date(profile.birth_date) : new Date()
   );
   const [showPicker, setShowPicker] = useState(false);
+
+  const [showPasswordSection, setShowPasswordSection] = useState(false);
+  const [isRequestingCode, setIsRequestingCode] = useState(false);
+  const [codeRequested, setCodeRequested] = useState(false);
+  const [verificationCode, setVerificationCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   const onChangeDate = (event: any, selectedDate?: Date) => {
     setShowPicker(Platform.OS === "ios");
@@ -49,22 +63,98 @@ export default function EditProfile({ onClose }: EditProfileProps) {
     }
   };
 
-  const handleSave = () => {
-    userAPI.updateProfile(profile);
-    Alert.alert(t("common.save"), t("profile.save_success"), [
-      { text: t("common.done"), onPress: onClose },
-    ]);
+  const handleSave = async () => {
+    try {
+      await userAPI.updateProfile(profile);
+      Alert.alert(t("common.success"), t("profile.save_success"), [
+        { text: t("common.done"), onPress: onClose },
+      ]);
+    } catch (error: any) {
+      Alert.alert(
+        t("common.error"),
+        error.message || t("profile.save_failed")
+      );
+    }
   };
 
-  const handleImagePicker = () => {
-    Alert.alert(t("profile.changeAvatar"), t("profile.selectImageSource"), [
-      { text: t("camera.takePhoto"), onPress: () => console.log("Camera") },
-      {
-        text: t("camera.selectFromGallery"),
-        onPress: () => console.log("Gallery"),
-      },
-      { text: t("common.cancel"), style: "cancel" },
-    ]);
+  const handleRequestPasswordChange = async () => {
+    try {
+      setIsRequestingCode(true);
+      const response = await userAPI.requestPasswordChange();
+      if (response.success) {
+        setCodeRequested(true);
+        Alert.alert(
+          t("common.success"),
+          `Verification code sent to ${user?.email}. Check the console/logs for the code.`,
+          [{ text: t("common.ok") }]
+        );
+        if (response.verificationCode) {
+          console.log(
+            `🔐 Verification Code: ${response.verificationCode}`
+          );
+        }
+      } else {
+        throw new Error(response.error || "Failed to send verification code");
+      }
+    } catch (error: any) {
+      Alert.alert(
+        t("common.error"),
+        error.message || "Failed to request password change"
+      );
+    } finally {
+      setIsRequestingCode(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!verificationCode.trim()) {
+      Alert.alert(t("common.error"), "Please enter the verification code");
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      Alert.alert(
+        t("common.error"),
+        "Password must be at least 6 characters long"
+      );
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      Alert.alert(t("common.error"), "Passwords do not match");
+      return;
+    }
+
+    try {
+      setIsChangingPassword(true);
+      const response = await userAPI.changePassword(
+        verificationCode,
+        newPassword
+      );
+      if (response.success) {
+        Alert.alert(
+          t("common.success"),
+          "Password changed successfully. Please sign in again.",
+          [
+            {
+              text: t("common.ok"),
+              onPress: () => {
+                dispatch(signOut());
+              },
+            },
+          ]
+        );
+      } else {
+        throw new Error(response.error || "Failed to change password");
+      }
+    } catch (error: any) {
+      Alert.alert(
+        t("common.error"),
+        error.message || "Failed to change password"
+      );
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
@@ -101,71 +191,76 @@ export default function EditProfile({ onClose }: EditProfileProps) {
   };
 
   return (
-    <ScrollView style={[styles.container, isRTL && styles.containerRTL]}>
+    <ScrollView
+      style={[
+        styles.container,
+        isRTL && styles.containerRTL,
+        { backgroundColor: colors.background },
+      ]}
+    >
       <View style={[styles.header, isRTL && styles.headerRTL]}>
         <TouchableOpacity onPress={onClose}>
-          <Ionicons name="close" size={24} color="#666" />
+          <Ionicons name="close" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.title, isRTL && styles.titleRTL]}>
+        <Text style={[styles.title, isRTL && styles.titleRTL, { color: colors.text }]}>
           {t("profile.edit_profile")}
         </Text>
         <TouchableOpacity onPress={handleSave}>
-          <Text style={styles.saveButton}>{t("common.save")}</Text>
+          <Text style={[styles.saveButton, { color: colors.primary }]}>{t("common.save")}</Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.content}>
-        {/* Avatar */}
-        <View style={styles.avatarSection}>
-          <TouchableOpacity onPress={handleImagePicker}>
-            <Image
-              source={{
-                uri: user?.avatar_url || "https://via.placeholder.com/100",
-              }}
-              style={styles.avatar}
-            />
-            <View style={styles.avatarOverlay}>
-              <Ionicons name="camera" size={20} color="white" />
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        {/* Form Fields */}
-        <View style={styles.formSection}>
+        <View style={[styles.formSection, { backgroundColor: colors.surface }]}>
           <View style={styles.inputGroup}>
-            <Text style={[styles.label, isRTL && styles.labelRTL]}>
+            <Text style={[styles.label, isRTL && styles.labelRTL, { color: colors.text }]}>
               {t("profile.name")}
             </Text>
             <TextInput
-              style={[styles.input, isRTL && styles.inputRTL]}
+              style={[
+                styles.input,
+                isRTL && styles.inputRTL,
+                { backgroundColor: colors.surfaceVariant, color: colors.text, borderColor: colors.border },
+              ]}
               value={profile.name}
               onChangeText={(text) => setProfile({ ...profile, name: text })}
               placeholder={t("profile.enterName")}
+              placeholderTextColor={colors.textTertiary}
             />
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={[styles.label, isRTL && styles.labelRTL]}>
+            <Text style={[styles.label, isRTL && styles.labelRTL, { color: colors.text }]}>
               {t("auth.email")}
             </Text>
             <TextInput
-              style={[styles.input, isRTL && styles.inputRTL]}
+              style={[
+                styles.input,
+                isRTL && styles.inputRTL,
+                { backgroundColor: colors.surfaceVariant, color: colors.text, borderColor: colors.border },
+              ]}
               value={profile.email}
               onChangeText={(text) => setProfile({ ...profile, email: text })}
               placeholder={t("profile.enterEmail")}
+              placeholderTextColor={colors.textTertiary}
               keyboardType="email-address"
             />
           </View>
+
           <View style={styles.inputGroup}>
-            <Text style={[styles.label, isRTL && styles.labelRTL]}>
+            <Text style={[styles.label, isRTL && styles.labelRTL, { color: colors.text }]}>
               {t("auth.birth_date")}
             </Text>
-
             <TouchableOpacity
-              style={[styles.input, { justifyContent: "center" }]}
+              style={[
+                styles.input,
+                { justifyContent: "center", backgroundColor: colors.surfaceVariant, borderColor: colors.border },
+              ]}
               onPress={() => setShowPicker(true)}
             >
-              <Text>{date.toISOString().split("T")[0]}</Text>
+              <Text style={{ color: colors.text }}>
+                {date.toISOString().split("T")[0]}
+              </Text>
             </TouchableOpacity>
 
             {showPicker && (
@@ -180,15 +275,193 @@ export default function EditProfile({ onClose }: EditProfileProps) {
           </View>
         </View>
 
-        {/* Danger Zone */}
-        <View style={styles.dangerZone}>
-          <Text style={[styles.dangerTitle, isRTL && styles.labelRTL]}>
+        <View style={[styles.passwordSection, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <TouchableOpacity
+            style={styles.passwordHeader}
+            onPress={() => setShowPasswordSection(!showPasswordSection)}
+          >
+            <View style={styles.passwordHeaderLeft}>
+              <Lock size={20} color={colors.primary} />
+              <Text style={[styles.passwordTitle, { color: colors.text }]}>
+                {t("profile.changePassword") || "Change Password"}
+              </Text>
+            </View>
+            <Ionicons
+              name={showPasswordSection ? "chevron-up" : "chevron-down"}
+              size={24}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+
+          {showPasswordSection && (
+            <View style={styles.passwordContent}>
+              {!codeRequested ? (
+                <View>
+                  <View style={[styles.infoBox, { backgroundColor: colors.primaryContainer }]}>
+                    <AlertCircle
+                      size={20}
+                      color={colors.onPrimaryContainer}
+                    />
+                    <Text
+                      style={[
+                        styles.infoText,
+                        { color: colors.onPrimaryContainer },
+                      ]}
+                    >
+                      {t("profile.passwordChangeInfo") ||
+                        "We'll send a verification code to your email to confirm the password change."}
+                    </Text>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.requestCodeButton, { backgroundColor: colors.primary }]}
+                    onPress={handleRequestPasswordChange}
+                    disabled={isRequestingCode}
+                  >
+                    {isRequestingCode ? (
+                      <ActivityIndicator size="small" color={colors.onPrimary} />
+                    ) : (
+                      <>
+                        <Mail size={20} color={colors.onPrimary} />
+                        <Text style={[styles.requestCodeText, { color: colors.onPrimary }]}>
+                          {t("profile.sendVerificationCode") ||
+                            "Send Verification Code"}
+                        </Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View>
+                  <View style={[styles.infoBox, { backgroundColor: colors.primaryContainer }]}>
+                    <Shield size={20} color={colors.onPrimaryContainer} />
+                    <Text
+                      style={[
+                        styles.infoText,
+                        { color: colors.onPrimaryContainer },
+                      ]}
+                    >
+                      {t("profile.codeVerificationInfo") ||
+                        "Enter the 6-digit code sent to your email and your new password below."}
+                    </Text>
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text
+                      style={[
+                        styles.label,
+                        isRTL && styles.labelRTL,
+                        { color: colors.text },
+                      ]}
+                    >
+                      {t("profile.verificationCode") || "Verification Code"}
+                    </Text>
+                    <TextInput
+                      style={[
+                        styles.input,
+                        isRTL && styles.inputRTL,
+                        { backgroundColor: colors.surfaceVariant, color: colors.text, borderColor: colors.border },
+                      ]}
+                      value={verificationCode}
+                      onChangeText={setVerificationCode}
+                      placeholder="000000"
+                      placeholderTextColor={colors.textTertiary}
+                      keyboardType="numeric"
+                      maxLength={6}
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text
+                      style={[
+                        styles.label,
+                        isRTL && styles.labelRTL,
+                        { color: colors.text },
+                      ]}
+                    >
+                      {t("profile.newPassword") || "New Password"}
+                    </Text>
+                    <TextInput
+                      style={[
+                        styles.input,
+                        isRTL && styles.inputRTL,
+                        { backgroundColor: colors.surfaceVariant, color: colors.text, borderColor: colors.border },
+                      ]}
+                      value={newPassword}
+                      onChangeText={setNewPassword}
+                      placeholder={t("profile.enterNewPassword") || "Enter new password"}
+                      placeholderTextColor={colors.textTertiary}
+                      secureTextEntry
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text
+                      style={[
+                        styles.label,
+                        isRTL && styles.labelRTL,
+                        { color: colors.text },
+                      ]}
+                    >
+                      {t("profile.confirmPassword") || "Confirm Password"}
+                    </Text>
+                    <TextInput
+                      style={[
+                        styles.input,
+                        isRTL && styles.inputRTL,
+                        { backgroundColor: colors.surfaceVariant, color: colors.text, borderColor: colors.border },
+                      ]}
+                      value={confirmPassword}
+                      onChangeText={setConfirmPassword}
+                      placeholder={t("profile.confirmNewPassword") || "Confirm new password"}
+                      placeholderTextColor={colors.textTertiary}
+                      secureTextEntry
+                    />
+                  </View>
+
+                  <View style={styles.passwordActions}>
+                    <TouchableOpacity
+                      style={[styles.cancelCodeButton, { backgroundColor: colors.surfaceVariant }]}
+                      onPress={() => {
+                        setCodeRequested(false);
+                        setVerificationCode("");
+                        setNewPassword("");
+                        setConfirmPassword("");
+                      }}
+                    >
+                      <Text style={[styles.cancelCodeText, { color: colors.text }]}>
+                        {t("common.cancel")}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.changePasswordButton, { backgroundColor: colors.primary }]}
+                      onPress={handleChangePassword}
+                      disabled={isChangingPassword}
+                    >
+                      {isChangingPassword ? (
+                        <ActivityIndicator size="small" color={colors.onPrimary} />
+                      ) : (
+                        <Text style={[styles.changePasswordText, { color: colors.onPrimary }]}>
+                          {t("profile.changePassword") || "Change Password"}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </View>
+          )}
+        </View>
+
+        <View style={[styles.dangerZone, { backgroundColor: colors.error + "20", borderColor: colors.error + "40" }]}>
+          <Text style={[styles.dangerTitle, isRTL && styles.labelRTL, { color: colors.error }]}>
             {t("profile.dangerZone")}
           </Text>
 
           {!showDeleteConfirm ? (
             <TouchableOpacity
-              style={styles.deleteButton}
+              style={[styles.deleteButton, { backgroundColor: colors.error }]}
               onPress={() => setShowDeleteConfirm(true)}
             >
               <Ionicons name="warning" size={20} color="white" />
@@ -198,30 +471,35 @@ export default function EditProfile({ onClose }: EditProfileProps) {
             </TouchableOpacity>
           ) : (
             <View style={styles.deleteConfirmSection}>
-              <Text style={[styles.deleteWarning, isRTL && styles.labelRTL]}>
+              <Text style={[styles.deleteWarning, isRTL && styles.labelRTL, { color: colors.error }]}>
                 {t("profile.deleteConfirmMessage")}
               </Text>
               <TextInput
-                style={[styles.input, isRTL && styles.inputRTL]}
+                style={[
+                  styles.input,
+                  isRTL && styles.inputRTL,
+                  { backgroundColor: colors.surface, color: colors.text, borderColor: colors.border },
+                ]}
                 value={deleteConfirmText}
                 onChangeText={setDeleteConfirmText}
                 placeholder={t("profile.deleteConfirmWord")}
+                placeholderTextColor={colors.textTertiary}
                 autoCapitalize="characters"
               />
               <View style={styles.deleteActions}>
                 <TouchableOpacity
-                  style={styles.cancelButton}
+                  style={[styles.cancelButton, { backgroundColor: colors.surfaceVariant }]}
                   onPress={() => {
                     setShowDeleteConfirm(false);
                     setDeleteConfirmText("");
                   }}
                 >
-                  <Text style={styles.cancelButtonText}>
+                  <Text style={[styles.cancelButtonText, { color: colors.text }]}>
                     {t("common.cancel")}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={styles.confirmDeleteButton}
+                  style={[styles.confirmDeleteButton, { backgroundColor: colors.error }]}
                   onPress={handleDeleteAccount}
                 >
                   <Text style={styles.confirmDeleteButtonText}>
@@ -240,7 +518,6 @@ export default function EditProfile({ onClose }: EditProfileProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f8f9fa",
   },
   containerRTL: {
     direction: "rtl",
@@ -250,7 +527,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     padding: 16,
-    backgroundColor: "white",
     borderBottomWidth: 1,
     borderBottomColor: "#e9ecef",
   },
@@ -260,42 +536,22 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#333",
   },
   titleRTL: {
     textAlign: "right",
   },
   saveButton: {
     fontSize: 16,
-    color: "#007AFF",
     fontWeight: "600",
   },
   content: {
     flex: 1,
-  },
-  avatarSection: {
-    alignItems: "center",
-    paddingVertical: 24,
-    backgroundColor: "white",
-    marginBottom: 16,
-  },
-  avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: "#e9ecef",
-  },
-  avatarOverlay: {
-    position: "absolute",
-    bottom: 0,
-    right: 0,
-    backgroundColor: "#007AFF",
-    borderRadius: 12,
-    padding: 6,
+    padding: 16,
+    gap: 16,
   },
   formSection: {
-    backgroundColor: "white",
     padding: 16,
+    borderRadius: 12,
   },
   inputGroup: {
     marginBottom: 16,
@@ -303,7 +559,6 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 16,
     fontWeight: "500",
-    color: "#333",
     marginBottom: 8,
   },
   labelRTL: {
@@ -311,11 +566,9 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 1,
-    borderColor: "#e9ecef",
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    backgroundColor: "#f8f9fa",
     ...Platform.select({
       web: {
         width: "100%",
@@ -325,22 +578,89 @@ const styles = StyleSheet.create({
   inputRTL: {
     textAlign: "right",
   },
-  textArea: {
-    height: 100,
-    textAlignVertical: "top",
+  passwordSection: {
+    borderRadius: 12,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  passwordHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+  },
+  passwordHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  passwordTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  passwordContent: {
+    padding: 16,
+    paddingTop: 0,
+  },
+  infoBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    gap: 8,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  requestCodeButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 14,
+    borderRadius: 8,
+    gap: 8,
+  },
+  requestCodeText: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  passwordActions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 16,
+  },
+  cancelCodeButton: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  cancelCodeText: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  changePasswordButton: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  changePasswordText: {
+    fontSize: 16,
+    fontWeight: "600",
   },
   dangerZone: {
-    marginTop: 32,
+    marginTop: 16,
     padding: 16,
-    backgroundColor: "#FEE2E2",
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#FCA5A5",
   },
   dangerTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#DC2626",
     marginBottom: 12,
   },
   deleteButton: {
@@ -348,7 +668,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    backgroundColor: "#DC2626",
     padding: 12,
     borderRadius: 8,
   },
@@ -362,7 +681,6 @@ const styles = StyleSheet.create({
   },
   deleteWarning: {
     fontSize: 14,
-    color: "#991B1B",
     fontWeight: "500",
   },
   deleteActions: {
@@ -372,19 +690,16 @@ const styles = StyleSheet.create({
   cancelButton: {
     flex: 1,
     padding: 12,
-    backgroundColor: "#E5E7EB",
     borderRadius: 8,
     alignItems: "center",
   },
   cancelButtonText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#374151",
   },
   confirmDeleteButton: {
     flex: 1,
     padding: 12,
-    backgroundColor: "#DC2626",
     borderRadius: 8,
     alignItems: "center",
   },
