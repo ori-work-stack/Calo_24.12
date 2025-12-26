@@ -426,7 +426,7 @@ export default function ScannedProductsGallery({
     >
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <LinearGradient
-          colors={["#10B981", "#059669"]}
+          colors={isDark ? ["#1e3a5f", "#2c5282"] : ["#3b82f6", "#2563eb"]}
           style={styles.header}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}

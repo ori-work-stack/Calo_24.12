@@ -476,7 +476,11 @@
     "take_photo": "Take Photo",
     "image_instructions": "Point the camera to the barcode",
     "photo_food": "Photo the food",
-    "enter_barcode": "Enter Barcode Here..."
+    "enter_barcode": "Enter Barcode Here...",
+    "scanned_products": "Scanned Products",
+    "no_products_found": "No products found",
+    "no_scanned_products": "No scanned products yet",
+    "scan_products_hint": "Start scanning products to see them here"
   },
   "profile": {
     "title": "Profile",
@@ -508,7 +512,24 @@
     "dangerZone": "Danger Zone",
     "deleteAccount": "Delete Account",
     "confirmDelete": "Confirm Delete",
-    "accountDeleted": "Your account has been permanently deleted"
+    "accountDeleted": "Your account has been permanently deleted",
+    "enterName": "Enter your name",
+    "enterEmail": "Enter your email",
+    "save_success": "Profile updated successfully",
+    "save_failed": "Failed to update profile",
+    "changePassword": "Change Password",
+    "passwordChangeInfo": "We'll send a verification code to your email to confirm the password change",
+    "sendVerificationCode": "Send Verification Code",
+    "verificationCode": "Verification Code",
+    "newPassword": "New Password",
+    "confirmPassword": "Confirm Password",
+    "enterNewPassword": "Enter new password",
+    "confirmNewPassword": "Confirm new password",
+    "codeVerificationInfo": "Enter the 6-digit code sent to your email and your new password below",
+    "deleteConfirmMessage": "This action cannot be undone. Type DELETE below to confirm",
+    "deleteConfirmWord": "DELETE",
+    "deleteConfirmError": "Please type {{confirmWord}} to confirm",
+    "deleteAccountError": "Failed to delete account"
   },
   "admin": {
     "dashboard": "Admin Dashboard",

@@ -296,7 +296,7 @@ Extract all visible nutritional information. If a value is not visible, use 0 or
         prisma.foodProduct.findMany({
           where: { user_id: userId },
           orderBy: { created_at: "desc" },
-          take: 25,
+          take: 50,
         }),
         prisma.meal.findMany({
           where: {
@@ -304,28 +304,57 @@ Extract all visible nutritional information. If a value is not visible, use 0 or
             meal_name: { contains: "g)" }, // Meals created from scanner have format "Product (XXXg)"
           },
           orderBy: { created_at: "desc" },
-          take: 25,
+          take: 50,
         }),
       ]);
 
-      // Combine and format the results
+      // Combine and format the results with complete data
       const history = [
         ...products.map((product) => ({
-          id: product.product_id,
+          id: product.product_id.toString(),
           product_name: product.product_name,
           name: product.product_name,
-          brand: product.brand,
+          brand: product.brand || undefined,
           category: product.category,
           barcode: product.barcode,
-          created_at: product.created_at,
+          nutrition_per_100g: product.nutrition_per_100g as any,
+          ingredients: product.ingredients as string[],
+          allergens: product.allergens as string[],
+          labels: product.labels as string[],
+          health_score: product.health_score || undefined,
+          image_url: product.image_url || undefined,
+          created_at: product.created_at.toISOString(),
+          scan_type: "barcode",
           type: "product",
         })),
         ...meals.map((meal) => ({
-          id: meal.meal_id,
+          id: meal.meal_id.toString(),
           product_name: meal.meal_name,
           name: meal.meal_name,
-          category: meal.food_category,
-          created_at: meal.created_at,
+          category: meal.food_category || "Food",
+          nutrition_per_100g: {
+            calories: meal.calories || 0,
+            protein: meal.protein_g || 0,
+            carbs: meal.carbs_g || 0,
+            fat: meal.fats_g || 0,
+            fiber: meal.fiber_g || 0,
+            sugar: meal.sugar_g || 0,
+            sodium: meal.sodium_mg || 0,
+          },
+          ingredients: meal.ingredients_json
+            ? Array.isArray(meal.ingredients_json)
+              ? meal.ingredients_json
+              : []
+            : [],
+          allergens: meal.allergens_json
+            ? Array.isArray(meal.allergens_json)
+              ? meal.allergens_json
+              : []
+            : [],
+          labels: [],
+          image_url: meal.image_url || undefined,
+          created_at: meal.created_at.toISOString(),
+          scan_type: "image",
           type: "meal",
         })),
       ].sort(
@@ -333,7 +362,7 @@ Extract all visible nutritional information. If a value is not visible, use 0 or
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
 
-      return history.slice(0, 50);
+      return history.slice(0, 100);
     } catch (error) {
       console.error("Error getting scan history:", error);
       return [];

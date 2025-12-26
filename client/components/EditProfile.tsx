@@ -139,7 +139,7 @@ export default function EditProfile({ onClose }: EditProfileProps) {
             {
               text: t("common.ok"),
               onPress: () => {
-                dispatch(signOut());
+                dispatch(signOut() as any);
               },
             },
           ]
@@ -177,7 +177,7 @@ export default function EditProfile({ onClose }: EditProfileProps) {
           {
             text: t("common.ok"),
             onPress: () => {
-              dispatch(signOut());
+              dispatch(signOut() as any);
             },
           },
         ]);
