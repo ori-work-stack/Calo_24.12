@@ -591,7 +591,7 @@ router.get("/stats", authenticateToken, async (req: AuthRequest, res) => {
         ),
       ]);
       defaultStats.todayWaterIntake =
-        (todayWaterIntake as any)?._sum?.amount_ml || 0;
+        (todayWaterIntake as any)?._sum?.milliliters_consumed || 0;
     } catch (error) {
       console.warn("⚠️ Failed to fetch water intake, using default");
     }

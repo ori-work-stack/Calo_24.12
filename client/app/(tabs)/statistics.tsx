@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   Dimensions,
   RefreshControl,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -14,11 +16,51 @@ import { useTheme } from "@/src/context/ThemeContext";
 import { useSelector } from "react-redux";
 import { RootState } from "@/src/store";
 import { api } from "@/src/services/api";
-import { Activity, TrendingUp, Award, Flame, Dumbbell, Target, Zap } from "lucide-react-native";
+import {
+  Activity,
+  TrendingUp,
+  Award,
+  Flame,
+  Dumbbell,
+  Target,
+  Zap,
+  Droplet,
+  Calendar,
+  BarChart3,
+  PieChart as PieChartIcon,
+} from "lucide-react-native";
 
 const { width } = Dimensions.get("window");
 
-const BarChart = ({ data }: { data: number[] }) => {
+interface StatisticsData {
+  level: number;
+  currentXP: number;
+  totalPoints: number;
+  currentStreak: number;
+  bestStreak: number;
+  weeklyStreak: number;
+  perfectDays: number;
+  dailyGoalDays: number;
+  totalDays: number;
+  averageCalories: number;
+  averageProtein: number;
+  averageCarbs: number;
+  averageFats: number;
+  averageFiber: number;
+  averageSugar: number;
+  averageSodium: number;
+  averageFluids: number;
+  achievements: any[];
+  dailyBreakdown: any[];
+  successfulDays: number;
+  averageCompletion: number;
+  happyDays: number;
+  highEnergyDays: number;
+  satisfiedDays: number;
+  averageMealQuality: number;
+}
+
+const BarChart = ({ data, label }: { data: number[]; label?: string }) => {
   if (!data || data.length === 0) {
     return (
       <View style={styles.chartContainer}>
@@ -41,8 +83,9 @@ const BarChart = ({ data }: { data: number[] }) => {
 
   return (
     <View style={styles.chartContainer}>
+      {label && <Text style={styles.chartLabel}>{label}</Text>}
       <View style={styles.barsContainer}>
-        {data.map((value, index) => {
+        {data.slice(0, 7).map((value, index) => {
           const barHeight = Math.max((value / maxValue) * 140, 8);
           return (
             <View key={index} style={styles.barWrapper}>
@@ -64,43 +107,14 @@ const BarChart = ({ data }: { data: number[] }) => {
   );
 };
 
-const LineChart = ({ data }: { data: number[] }) => {
-  if (!data || data.length === 0) {
-    return (
-      <View style={styles.lineChartContainer}>
-        <Text style={styles.noDataText}>No data available</Text>
-      </View>
-    );
-  }
-
-  const maxValue = Math.max(...data, 1);
-  const days = ["12", "13", "14", "15"];
-
-  return (
-    <View style={styles.lineChartContainer}>
-      <View style={styles.lineChart}>
-        {data.map((value, index) => {
-          const percentage = Math.max((value / maxValue) * 100, 5);
-          return (
-            <View key={index} style={styles.lineBarWrapper}>
-              <View style={styles.lineBarBg}>
-                <LinearGradient
-                  colors={["#8B5CF6", "#EC4899"]}
-                  style={[styles.lineBar, { height: `${percentage}%` }]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 0, y: 1 }}
-                />
-              </View>
-              <Text style={styles.lineBarLabel}>{days[index]}</Text>
-            </View>
-          );
-        })}
-      </View>
-    </View>
-  );
-};
-
-const StatCard = ({ title, value, unit, icon: Icon, gradientColors, percentage }: any) => (
+const StatCard = ({
+  title,
+  value,
+  unit,
+  icon: Icon,
+  gradientColors,
+  percentage,
+}: any) => (
   <View style={styles.statCardWrapper}>
     <LinearGradient colors={gradientColors} style={styles.statCard}>
       <View style={styles.statCardHeader}>
@@ -115,7 +129,7 @@ const StatCard = ({ title, value, unit, icon: Icon, gradientColors, percentage }
       </Text>
       {percentage !== undefined && (
         <View style={styles.percentageBar}>
-          <View style={[styles.percentageFill, { width: `${percentage}%` }]} />
+          <View style={[styles.percentageFill, { width: `${Math.min(percentage, 100)}%` }]} />
         </View>
       )}
     </LinearGradient>
@@ -124,7 +138,7 @@ const StatCard = ({ title, value, unit, icon: Icon, gradientColors, percentage }
 
 const DaySelector = ({ days, selected, onSelect }: any) => (
   <View style={styles.daySelector}>
-    {days.map((day: number) => (
+    {days.map((day: string) => (
       <TouchableOpacity
         key={day}
         style={[styles.dayButton, selected === day && styles.dayButtonActive]}
@@ -141,59 +155,84 @@ const DaySelector = ({ days, selected, onSelect }: any) => (
 
 export default function StatisticsScreen() {
   const { colors } = useTheme();
-  const { meals } = useSelector((state: RootState) => state.meal);
-  const [selectedDay, setSelectedDay] = useState(13);
+  const { user } = useSelector((state: RootState) => state.auth);
+  const [selectedPeriod, setSelectedPeriod] = useState<"today" | "week" | "month">("week");
   const [refreshing, setRefreshing] = useState(false);
-  const [stats, setStats] = useState({
-    totalCalories: 0,
-    avgCalories: 0,
-    totalProtein: 0,
-    totalCarbs: 0,
-    totalMeals: 0,
-    weeklyCalories: [] as number[],
-  });
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<StatisticsData | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadStatistics();
-  }, [meals]);
+  }, [selectedPeriod]);
 
   const loadStatistics = async () => {
     try {
-      const totalCalories = meals.reduce((sum, meal) => sum + (meal.calories || 0), 0);
-      const totalProtein = meals.reduce((sum, meal) => sum + (meal.protein || 0), 0);
-      const totalCarbs = meals.reduce((sum, meal) => sum + (meal.carbohydrates || 0), 0);
+      setError(null);
+      setLoading(true);
 
-      const weeklyCalories = meals.length > 0
-        ? [1200, 1500, 1800, 1600, 1900, 1400, 1700]
-        : [1200, 1500, 1800, 1600, 1900, 1400, 1700];
+      console.log("📊 Fetching statistics...");
+      const response = await api.get("/statistics", {
+        params: { period: selectedPeriod },
+        timeout: 30000,
+      });
 
-      setStats({
-        totalCalories: Math.round(totalCalories) || 8500,
-        avgCalories: Math.round(totalCalories / 7) || 1214,
-        totalProtein: Math.round(totalProtein) || 520,
-        totalCarbs: Math.round(totalCarbs) || 874,
-        totalMeals: meals.length || 21,
-        weeklyCalories,
-      });
-    } catch (error) {
-      console.error("Error loading statistics:", error);
-      const defaultCalories = [1200, 1500, 1800, 1600, 1900, 1400, 1700];
-      setStats({
-        totalCalories: 8500,
-        avgCalories: 1214,
-        totalProtein: 520,
-        totalCarbs: 874,
-        totalMeals: 21,
-        weeklyCalories: defaultCalories,
-      });
+      console.log("📊 Statistics response:", response.data);
+
+      if (response.data.success && response.data.data) {
+        setStats(response.data.data);
+      } else {
+        throw new Error("Failed to load statistics");
+      }
+    } catch (error: any) {
+      console.error("❌ Error loading statistics:", error);
+      setError(error.message || "Failed to load statistics");
+      Alert.alert("Error", "Failed to load statistics. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const onRefresh = async () => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadStatistics();
     setRefreshing(false);
+  }, [selectedPeriod]);
+
+  const getWeeklyCalories = () => {
+    if (!stats?.dailyBreakdown) return [0, 0, 0, 0, 0, 0, 0];
+
+    const last7Days = stats.dailyBreakdown.slice(-7);
+    return last7Days.map((day: any) => day.calories || 0);
   };
+
+  if (loading && !stats) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#3B82F6" />
+          <Text style={[styles.loadingText, { color: colors.text }]}>
+            Loading statistics...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error && !stats) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.errorContainer}>
+          <Text style={[styles.errorText, { color: colors.text }]}>
+            {error}
+          </Text>
+          <TouchableOpacity style={styles.retryButton} onPress={loadStatistics}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: "#F5F7FA" }]}>
@@ -204,95 +243,84 @@ export default function StatisticsScreen() {
       >
         <LinearGradient
           colors={["#1E3A8A", "#1E40AF", "#3B82F6"]}
-          style={styles.motivationalCard}
+          style={styles.headerCard}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
         >
-          <View style={styles.motivationalIconContainer}>
-            <Award size={64} color="#fff" strokeWidth={2} />
+          <View style={styles.headerIconContainer}>
+            <Award size={48} color="#fff" strokeWidth={2} />
           </View>
-          <Text style={styles.motivationalTitle}>Make yourself stronger</Text>
-          <Text style={styles.motivationalSubtitle}>than your excuses</Text>
-          <TouchableOpacity style={styles.getStartedButton} activeOpacity={0.9}>
-            <LinearGradient
-              colors={["#3B82F6", "#2563EB"]}
-              style={styles.getStartedGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            >
-              <Text style={styles.getStartedText}>Get Started</Text>
-            </LinearGradient>
-          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Your Progress</Text>
+          <Text style={styles.headerSubtitle}>
+            Level {stats?.level || 1} • {stats?.currentXP || 0} XP
+          </Text>
+          <View style={styles.streakBadge}>
+            <Flame size={20} color="#FFD700" />
+            <Text style={styles.streakText}>{stats?.currentStreak || 0} Day Streak</Text>
+          </View>
         </LinearGradient>
 
-        <View style={[styles.card, { backgroundColor: colors.card }]}>
-          <View style={styles.cardHeader}>
-            <Text style={[styles.cardTitle, { color: colors.text }]}>Your Activities</Text>
-            <View style={styles.trendingBadge}>
-              <TrendingUp size={18} color="#10B981" strokeWidth={2.5} />
-            </View>
+        <DaySelector
+          days={["Today", "Week", "Month"]}
+          selected={selectedPeriod.charAt(0).toUpperCase() + selectedPeriod.slice(1)}
+          onSelect={(day: string) => setSelectedPeriod(day.toLowerCase() as any)}
+        />
+
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Weekly Overview</Text>
+          <View style={[styles.chartCard, { backgroundColor: colors.card }]}>
+            <BarChart data={getWeeklyCalories()} label="Daily Calories" />
           </View>
+        </View>
 
-          <DaySelector days={[12, 13, 14, 15]} selected={selectedDay} onSelect={setSelectedDay} />
-
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Weekly Stats Chart</Text>
-            <LineChart data={[1400, 1600, 1800, 1500]} />
-          </View>
-
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Nutrition Averages</Text>
           <View style={styles.statsRow}>
             <View style={[styles.smallStatCard, { backgroundColor: "#E9D5FF" }]}>
-              <Text style={styles.smallStatValue}>{stats.avgCalories}</Text>
+              <Text style={styles.smallStatValue}>{stats?.averageCalories || 0}</Text>
               <Text style={styles.smallStatLabel}>Calories</Text>
             </View>
             <View style={[styles.smallStatCard, { backgroundColor: "#FBCFE8" }]}>
-              <Text style={styles.smallStatValue}>{stats.totalProtein}</Text>
+              <Text style={styles.smallStatValue}>{stats?.averageProtein || 0}g</Text>
               <Text style={styles.smallStatLabel}>Protein</Text>
             </View>
             <View style={[styles.smallStatCard, { backgroundColor: "#DBEAFE" }]}>
-              <Text style={styles.smallStatValue}>{stats.totalCarbs}</Text>
+              <Text style={styles.smallStatValue}>{stats?.averageCarbs || 0}g</Text>
               <Text style={styles.smallStatLabel}>Carbs</Text>
             </View>
           </View>
         </View>
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Weekly Overview</Text>
-          <View style={[styles.chartCard, { backgroundColor: colors.card }]}>
-            <BarChart data={stats.weeklyCalories} />
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Today's Progress</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Achievement Stats</Text>
           <LinearGradient
             colors={["#1E293B", "#0F172A"]}
             style={styles.progressCard}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
           >
-            <Text style={styles.progressTitle}>Today's Stats Check</Text>
+            <Text style={styles.progressTitle}>Your Achievements</Text>
             <View style={styles.progressStats}>
               <View style={styles.progressStatItem}>
                 <View style={styles.progressIconBg}>
                   <Flame size={28} color="#F59E0B" strokeWidth={2.5} />
                 </View>
-                <Text style={styles.progressStatValue}>310</Text>
-                <Text style={styles.progressStatLabel}>Min</Text>
+                <Text style={styles.progressStatValue}>{stats?.currentStreak || 0}</Text>
+                <Text style={styles.progressStatLabel}>Days Streak</Text>
               </View>
               <View style={styles.progressStatItem}>
                 <View style={styles.progressIconBg}>
-                  <Activity size={28} color="#8B5CF6" strokeWidth={2.5} />
+                  <Target size={28} color="#8B5CF6" strokeWidth={2.5} />
                 </View>
-                <Text style={styles.progressStatValue}>570</Text>
-                <Text style={styles.progressStatLabel}>Cal</Text>
+                <Text style={styles.progressStatValue}>{stats?.perfectDays || 0}</Text>
+                <Text style={styles.progressStatLabel}>Perfect Days</Text>
               </View>
               <View style={styles.progressStatItem}>
                 <View style={styles.progressIconBg}>
-                  <Zap size={28} color="#10B981" strokeWidth={2.5} />
+                  <Award size={28} color="#10B981" strokeWidth={2.5} />
                 </View>
-                <Text style={styles.progressStatValue}>874</Text>
-                <Text style={styles.progressStatLabel}>Kcal</Text>
+                <Text style={styles.progressStatValue}>{stats?.successfulDays || 0}</Text>
+                <Text style={styles.progressStatLabel}>Goal Days</Text>
               </View>
             </View>
           </LinearGradient>
@@ -300,36 +328,36 @@ export default function StatisticsScreen() {
 
         <View style={styles.statsGrid}>
           <StatCard
-            title="Total Calories"
-            value={stats.totalCalories}
+            title="Avg Calories"
+            value={stats?.averageCalories || 0}
             unit="kcal"
             icon={Flame}
             gradientColors={["#F59E0B", "#D97706"]}
-            percentage={85}
+            percentage={Math.round(((stats?.averageCalories || 0) / 2000) * 100)}
           />
           <StatCard
-            title="Avg Daily"
-            value={stats.avgCalories}
-            unit="kcal"
-            icon={Activity}
-            gradientColors={["#8B5CF6", "#7C3AED"]}
-            percentage={70}
-          />
-          <StatCard
-            title="Total Protein"
-            value={stats.totalProtein}
+            title="Avg Protein"
+            value={stats?.averageProtein || 0}
             unit="g"
             icon={Dumbbell}
             gradientColors={["#10B981", "#059669"]}
-            percentage={65}
+            percentage={Math.round(((stats?.averageProtein || 0) / 150) * 100)}
           />
           <StatCard
-            title="Total Meals"
-            value={stats.totalMeals}
-            unit="meals"
-            icon={Target}
+            title="Avg Hydration"
+            value={Math.round((stats?.averageFluids || 0) / 250)}
+            unit="cups"
+            icon={Droplet}
+            gradientColors={["#06B6D4", "#0891B2"]}
+            percentage={Math.round(((stats?.averageFluids || 0) / 2500) * 100)}
+          />
+          <StatCard
+            title="Total Days"
+            value={stats?.totalDays || 0}
+            unit="days"
+            icon={Calendar}
             gradientColors={["#3B82F6", "#2563EB"]}
-            percentage={90}
+            percentage={100}
           />
         </View>
       </ScrollView>
@@ -341,11 +369,44 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+    gap: 16,
+  },
+  errorText: {
+    fontSize: 16,
+    textAlign: "center",
+    fontWeight: "600",
+  },
+  retryButton: {
+    backgroundColor: "#3B82F6",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  retryButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
+  },
   scrollContent: {
     padding: 20,
     paddingBottom: 120,
   },
-  motivationalCard: {
+  headerCard: {
     borderRadius: 28,
     padding: 36,
     marginBottom: 24,
@@ -356,71 +417,37 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 8,
   },
-  motivationalIconContainer: {
-    marginBottom: 20,
+  headerIconContainer: {
+    marginBottom: 16,
   },
-  motivationalTitle: {
-    fontSize: 26,
+  headerTitle: {
+    fontSize: 28,
     fontWeight: "900",
     color: "#fff",
     textAlign: "center",
     letterSpacing: 0.5,
   },
-  motivationalSubtitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "rgba(255,255,255,0.95)",
+  headerSubtitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "rgba(255,255,255,0.9)",
     textAlign: "center",
-    marginBottom: 28,
-    letterSpacing: 0.3,
+    marginTop: 8,
   },
-  getStartedButton: {
-    borderRadius: 18,
-    overflow: "hidden",
-    shadowColor: "#3B82F6",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  getStartedGradient: {
-    paddingHorizontal: 48,
-    paddingVertical: 16,
-  },
-  getStartedText: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "900",
-    letterSpacing: 0.5,
-  },
-  card: {
-    borderRadius: 28,
-    padding: 24,
-    marginBottom: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-    elevation: 6,
-  },
-  cardHeader: {
+  streakBadge: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 24,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 24,
+    marginTop: 16,
+    gap: 8,
   },
-  cardTitle: {
-    fontSize: 24,
-    fontWeight: "900",
-    letterSpacing: 0.3,
-  },
-  trendingBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#D1FAE5",
-    alignItems: "center",
-    justifyContent: "center",
+  streakText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "800",
   },
   section: {
     marginBottom: 24,
@@ -459,75 +486,12 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   dayButtonText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "900",
     color: "#6B7280",
   },
   dayButtonTextActive: {
     color: "#fff",
-  },
-  lineChartContainer: {
-    minHeight: 140,
-    marginBottom: 20,
-  },
-  lineChart: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    alignItems: "flex-end",
-    height: 140,
-    paddingHorizontal: 8,
-  },
-  lineBarWrapper: {
-    flex: 1,
-    alignItems: "center",
-    marginHorizontal: 6,
-  },
-  lineBarBg: {
-    width: "100%",
-    height: 120,
-    justifyContent: "flex-end",
-    marginBottom: 10,
-  },
-  lineBar: {
-    width: "100%",
-    borderRadius: 12,
-    minHeight: 8,
-    shadowColor: "#8B5CF6",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  lineBarLabel: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#6B7280",
-  },
-  statsRow: {
-    flexDirection: "row",
-    gap: 14,
-  },
-  smallStatCard: {
-    flex: 1,
-    borderRadius: 20,
-    padding: 18,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  smallStatValue: {
-    fontSize: 26,
-    fontWeight: "900",
-    color: "#1F2937",
-    marginBottom: 6,
-  },
-  smallStatLabel: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#6B7280",
   },
   chartCard: {
     borderRadius: 28,
@@ -540,6 +504,12 @@ const styles = StyleSheet.create({
   },
   chartContainer: {
     minHeight: 200,
+  },
+  chartLabel: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#6B7280",
+    marginBottom: 16,
   },
   barsContainer: {
     flexDirection: "row",
@@ -579,6 +549,32 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#9CA3AF",
   },
+  statsRow: {
+    flexDirection: "row",
+    gap: 14,
+  },
+  smallStatCard: {
+    flex: 1,
+    borderRadius: 20,
+    padding: 18,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  smallStatValue: {
+    fontSize: 24,
+    fontWeight: "900",
+    color: "#1F2937",
+    marginBottom: 6,
+  },
+  smallStatLabel: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#6B7280",
+  },
   progressCard: {
     borderRadius: 28,
     padding: 28,
@@ -613,13 +609,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   progressStatValue: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: "900",
     color: "#fff",
     marginBottom: 6,
   },
   progressStatLabel: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "800",
     color: "rgba(255,255,255,0.8)",
   },
@@ -662,14 +658,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   statCardValue: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: "900",
     color: "#fff",
     marginBottom: 12,
     letterSpacing: 0.3,
   },
   statCardUnit: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "700",
   },
   percentageBar: {
